@@ -6,7 +6,7 @@ namespace Bagels.View
     /// <summary>The side-panel icon the player drags new As out of. Drops into the empty slot under the pointer.</summary>
     public sealed class ASpawner : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
-        GameView view;
+        [SerializeField] GameView view;
         PastryView ghost;
 
         public void Init(GameView gameView) => view = gameView;

@@ -9,24 +9,28 @@ using UnityEngine.UI;
 namespace Bagels.View
 {
     /// <summary>
-    /// Left-hand panel: goal, the A spawner, a diagram of every formula, a legend, the last cascade and a reset
-    /// button. Built in code on a screen-space canvas scaled to a 1080-pixel-tall reference.
+    /// Left-hand panel: goal, which board is being viewed, the A spawner, a diagram of every formula, a legend, the last cascade and a reset
+    /// button. Built in code on a screen-space canvas scaled to a 1080-pixel-tall reference. Editor tooling saves the
+    /// built panel into the scene, so every reference it needs at runtime is serialized.
     /// </summary>
     public sealed class SidePanel : MonoBehaviour
     {
         public const float Width = 440f;
         const float ReferenceHeight = 1080f;
         const float Pad = 24f;
-        const float Gap = 10f;
+        const float Gap = 6f;
 
         static readonly Color Background = new Color(0.24f, 0.17f, 0.12f);
         static readonly Color Muted = new Color(0.85f, 0.78f, 0.68f);
         static readonly Color Win = new Color(0.98f, 0.8f, 0.25f);
 
-        GameView view;
+        [SerializeField] GameView view;
+        [SerializeField] Text status;
+        [SerializeField] Text viewing;
+        [SerializeField] Button resetButton;
         RectTransform panel;
-        Text status;
         float cursor;
+        bool hooked;
 
         /// <summary>Fraction of the screen width the panel covers (canvas matches height, so this is exact).</summary>
         public static float ScreenFraction(float aspect) => Width / (ReferenceHeight * aspect);
@@ -48,19 +52,40 @@ namespace Bagels.View
 
             var sidePanel = go.AddComponent<SidePanel>();
             sidePanel.Build(view);
+            if (sidePanel.isActiveAndEnabled) sidePanel.Hook(); // OnEnable ran before Build set the references
             return sidePanel;
         }
 
-        static void EnsureEventSystem()
+        /// <summary>Makes sure the scene has an EventSystem so the panel receives clicks and drags.</summary>
+        public static EventSystem EnsureEventSystem()
         {
-            if (FindFirstObjectByType<EventSystem>() != null) return;
+            var existing = FindFirstObjectByType<EventSystem>();
+            if (existing != null) return existing;
             var es = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
-            es.GetComponent<InputSystemUIInputModule>().AssignDefaultActions();
+            // The module assigns its default actions in OnEnable when it has none. Only do it here at runtime:
+            // the defaults are an in-memory asset that can't be saved into a scene.
+            if (Application.isPlaying) es.GetComponent<InputSystemUIInputModule>().AssignDefaultActions();
+            return es.GetComponent<EventSystem>();
         }
 
-        void OnDestroy()
+        void OnEnable() => Hook();
+        void OnDisable() => Unhook();
+
+        void Hook()
         {
+            if (hooked || view == null || !Application.isPlaying) return;
+            view.Changed += Refresh;
+            if (resetButton != null) resetButton.onClick.AddListener(view.NewGame);
+            hooked = true;
+            Refresh();
+        }
+
+        void Unhook()
+        {
+            if (!hooked) return;
             if (view != null) view.Changed -= Refresh;
+            if (resetButton != null && view != null) resetButton.onClick.RemoveListener(view.NewGame);
+            hooked = false;
         }
 
         void Build(GameView gameView)
@@ -87,6 +112,13 @@ namespace Bagels.View
             Place(goalText.rectTransform, new Vector2(0f, 0f), new Vector2(130f, 60f));
             if (level.Target != null)
                 At(UiFactory.PastryIcon(goal, level.Target, 52f, view), new Vector2(160f, -30f));
+
+            // Which board is the current one, and how to move between boards.
+            var viewBlock = Block("Viewing", 48f);
+            viewing = UiFactory.Text("Path", viewBlock, "", 19, ViewColors.Paper, TextAnchor.MiddleLeft, FontStyle.Bold);
+            Place(viewing.rectTransform, Vector2.zero, new Vector2(Width - 2 * Pad, 26f));
+            var nav = UiFactory.Text("Hint", viewBlock, "Scroll up on a board to open it, down to go back", 16, Muted);
+            Place(nav.rectTransform, new Vector2(0f, 26f), new Vector2(Width - 2 * Pad, 22f));
 
             // Spawner.
             var spawnBlock = Block("Spawner", 140f);
@@ -122,9 +154,6 @@ namespace Bagels.View
             UiFactory.Fill(status.rectTransform);
 
             BuildResetButton(Block("Reset", 44f));
-
-            view.Changed += Refresh;
-            Refresh();
         }
 
         void BuildLegend(RectTransform block)
@@ -166,16 +195,16 @@ namespace Bagels.View
             var img = UiFactory.Image("Reset Button", block, null, ViewColors.Darken(Muted, 0.35f), new Vector2(150f, 44f));
             img.raycastTarget = true;
             Place(img.rectTransform, Vector2.zero, new Vector2(150f, 44f));
-            var button = img.gameObject.AddComponent<Button>();
-            button.targetGraphic = img;
-            button.onClick.AddListener(() => view.NewGame());
+            resetButton = img.gameObject.AddComponent<Button>();
+            resetButton.targetGraphic = img;
             var label = UiFactory.Text("Label", img.rectTransform, "Reset", 22, ViewColors.Paper, TextAnchor.MiddleCenter, FontStyle.Bold);
             UiFactory.Fill(label.rectTransform);
         }
 
         void Refresh()
         {
-            if (status == null) return;
+            if (status == null || view == null) return;
+            if (viewing != null) viewing.text = "Viewing: " + view.FocusPath();
             var state = view.State;
             var target = view.Level.Target;
 

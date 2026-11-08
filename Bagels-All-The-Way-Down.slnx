@@ -5,4 +5,5 @@
   <Project Path="Bagels.Data.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="Bagels.View.Tests.csproj" />
 </Solution>

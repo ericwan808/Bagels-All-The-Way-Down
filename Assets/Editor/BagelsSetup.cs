@@ -5,10 +5,12 @@ using Bagels.View;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.InputSystem.UI;
 
 /// <summary>
-/// Builds the test-set content: generated sprites, pastry/formula/level assets, the Pastry prefab, and the Game
-/// object in the main scene. Idempotent: re-running updates the existing assets in place.
+/// Builds the test-set content: generated sprites, pastry/formula/level assets, the Pastry prefab, and the main
+/// scene's Game object with its side panel and an EventSystem. Idempotent: re-running updates everything in place.
+/// The board itself is not saved; <see cref="GameView"/> draws it as an edit-mode preview.
 /// </summary>
 public static class BagelsSetup
 {
@@ -32,6 +34,36 @@ public static class BagelsSetup
 
         AssetDatabase.SaveAssets();
         Debug.Log("Bagels: test level, prefab and scene set up.");
+    }
+
+    /// <summary>Rebuilds the saved side panel in the open scene, e.g. after editing formulas or pastry types.</summary>
+    [MenuItem("Bagels/Rebuild Side Panel")]
+    public static void RebuildPanel()
+    {
+        var game = Object.FindFirstObjectByType<GameView>();
+        if (game == null) { Debug.LogError("Bagels: no GameView in the open scene. Run Bagels/Setup Test Level."); return; }
+        BakeUi(game);
+        EditorSceneManager.MarkSceneDirty(game.gameObject.scene);
+        Debug.Log("Bagels: side panel rebuilt. Save the scene to keep it.");
+    }
+
+    /// <summary>Redraws the edit-mode board preview (it also redraws on its own when the scene loads or GameView changes).</summary>
+    [MenuItem("Bagels/Refresh Board Preview")]
+    public static void RefreshPreview()
+    {
+        foreach (var game in Object.FindObjectsByType<GameView>(FindObjectsSortMode.None)) game.RefreshPreview();
+    }
+
+    static void BakeUi(GameView game)
+    {
+        if (game.RebuildPanel() == null) Debug.LogError("Bagels: GameView has no level, so no side panel was built.", game);
+        var es = SidePanel.EnsureEventSystem();
+        var module = es.GetComponent<InputSystemUIInputModule>();
+        // In-memory default actions would be saved as a missing reference; with none, the module assigns its
+        // defaults when it starts at runtime.
+        if (module != null && module.actionsAsset != null && !EditorUtility.IsPersistent(module.actionsAsset))
+            module.UnassignActions();
+        EditorUtility.SetDirty(es.gameObject);
     }
 
     // ------------------------------------------------------------------ data
@@ -137,7 +169,9 @@ public static class BagelsSetup
         if (game == null) game = new GameObject("Game").AddComponent<GameView>();
         game.transform.position = Vector3.zero;
         game.EditorInit(level, prefab, circle, ring, square, triangle);
+        BakeUi(game);
         EditorUtility.SetDirty(game);
+        game.RefreshPreview();
 
         var cam = Camera.main;
         if (cam != null)
