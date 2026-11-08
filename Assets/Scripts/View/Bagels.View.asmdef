@@ -1,0 +1,19 @@
+{
+    "name": "Bagels.View",
+    "rootNamespace": "Bagels.View",
+    "references": [
+        "Bagels.Core",
+        "Bagels.Data",
+        "UnityEngine.UI",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
