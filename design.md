@@ -44,12 +44,38 @@ The target bagel can appear anywhere. As can go to any empty slot.
 
 Keep the game logic separate from the visuals. Pastry types and formulas fit well as ScriptableObjects: data assets for name, symbol, sprite and recipe. The board state is easiest as plain C# (graph, slots, matching, cascades), with prefabs only for display. That makes cascades testable without the Unity scene, and lets animations play after the logic has finished.
 
-### Testing
-We will consider these testing Pastry types:
-A - the default element we can place
-B - created through two adjacent As
-C - created through two adjacent Bs, is a board with the shape of a triangle
-D - created through a triangle of two As and one B
-E - created with a B that is vertically adjacent to two Ds at a lower level with the B being a catalyst
+### Formulas
 
-Try to create each Pastry and verify its behavior against the design description.
+#### Text notation (developer-facing only)
+Formulas are small graphs: ingredients are nodes and required adjacencies are edges. They are written in one of two forms.
+
+**Condensed form** (modeled on chemistry's SMILES notation):
+- **Atoms**: an ingredient is its pastry symbol, e.g. `A`, `B`.
+- **Catalysts**: wrapped in brackets, e.g. `[B]`.
+- **Normal adjacency**: `-` between two atoms, e.g. `A-B`.
+- **Vertical adjacency**: `<` or `>`, with the lower-level atom on the small side. `D<B` means D is one level below B.
+- **Branches**: extra neighbors of an atom go in parentheses right after it. `A(-B)(-C)-D` means A is adjacent to B, C and D.
+- **Cycles (ring closures)**: a digit after an atom tags it. The next time that digit appears, it closes a bond back to the tagged atom. The bond symbol goes before the closing digit and is read as if the tagged atom were written in its place. `A1-B-A-1` is a triangle, and `B<1` would mean B is below the tagged atom. A digit can be reused once its ring has closed. Use more digits for overlapping rings.
+- **Spelling is not unique**: `A-A-B` and `B-A-A` are the same formula. If a string is ever used as a key (e.g. duplicate detection), pick a single canonical spelling.
+
+**Explicit form** works for any shape and is the easiest to parse. It maps directly onto `FormulaAsset`'s ingredients and links:
+- The nodes come first, separated by spaces, with catalysts in brackets. Then a `|`, then the edges.
+- Edges use 0-based node indices with the same bond symbols: `i-j` is normal, `i<j` means i is below j, and `i>j` means j is below i.
+- Example: `A B A | 0-1 1-2 0-2`.
+
+#### Formula list
+Listed in product order. Two rules keep the list consistent:
+- A formula only uses elements that come before its product in this list.
+- When more than one formula matches, the game checks them from the bottom of this table up (J first, B last), and the first match fires.
+
+| # | Product | Condensed formula | Explicit node/edge formula |
+|---|---|---|---|
+| 1 | B | `A-A` | `A A \| 0-1` |
+| 2 | C (board, K3 triangle) | `B-B` | `B B \| 0-1` |
+| 3 | D | `A1-B-A-1` | `A B A \| 0-1 1-2 0-2` |
+| 4 | E (board, K2,3) | `D<A>D` | `D A D \| 0<1 1>2` |
+| 5 | F | `B-[C]-B` | `B [C] B \| 0-1 1-2` |
+| 6 | G | `F-B-F` | `F B F \| 0-1 1-2` |
+| 7 | H (board, W7) | `B>G<B` | `B G B \| 0>1 1<2` |
+| 8 | I | `F1>G<F-1` | `F G F \| 0>1 1<2 0-2` |
+| 9 | J | `A>A>[I]` | `A A [I] \| 0>1 1>2` |

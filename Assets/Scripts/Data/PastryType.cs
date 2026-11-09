@@ -3,7 +3,8 @@ using UnityEngine;
 
 namespace Bagels.Data
 {
-    public enum LayoutKind { None, P3, K3, W7 }
+    // Append new kinds at the end: assets store the numeric value.
+    public enum LayoutKind { None, P3, K3, W7, K23 }
 
     /// <summary>Authoring data for one pastry type. A non-None layout makes it bread.</summary>
     [CreateAssetMenu(menuName = "Bagels/Pastry Type", fileName = "PastryType")]
@@ -29,6 +30,7 @@ namespace Bagels.Data
             LayoutKind.P3 => BoardLayout.P3,
             LayoutKind.K3 => BoardLayout.K3,
             LayoutKind.W7 => BoardLayout.W7,
+            LayoutKind.K23 => BoardLayout.K23,
             _ => null,
         };
 

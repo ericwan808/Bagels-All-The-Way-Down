@@ -68,6 +68,9 @@ namespace Bagels.View
         [SerializeField] float zoomDuration = 0.45f;
         [Tooltip("Seconds after a zoom during which further scrolling is ignored, so one flick moves one level.")]
         [SerializeField] float scrollCooldown = 0.15f;
+        [Header("Input")]
+        [Tooltip("Most seconds between the two clicks of a double click that places an A in an empty slot.")]
+        [SerializeField] float doubleClickTime = 0.35f;
         [Tooltip("Side panel saved in the scene. If missing, one is built at runtime.")]
         [SerializeField] SidePanel panel;
 
@@ -86,6 +89,7 @@ namespace Bagels.View
         readonly Dictionary<Symbol, PastryType> types = new Dictionary<Symbol, PastryType>();
         readonly List<SlotTarget> targets = new List<SlotTarget>();
         readonly List<BreadTarget> breads = new List<BreadTarget>();
+        readonly PlacementHistory history = new PlacementHistory();
         Rules rules;
         Transform boardRoot;
         SlotTarget hovered;
@@ -95,6 +99,12 @@ namespace Bagels.View
         Camera cam;
         Coroutine transition;
         float scrollReadyTime;
+        bool pointerWasDown;
+        // The empty slot hit by the last click, to recognise a double click. Targets are rebuilt on every redraw,
+        // so the slot is kept by board and index rather than by its SlotTarget.
+        Board lastClickBoard;
+        int lastClickSlot = -1;
+        float lastClickTime = float.NegativeInfinity;
 
         // Drawing context for the frame currently being built.
         Transform drawRoot;
@@ -117,6 +127,9 @@ namespace Bagels.View
 
         /// <summary>True while a zoom animation plays. Placement is disabled meanwhile.</summary>
         public bool IsZooming => transition != null;
+
+        /// <summary>True if there is a placement to undo.</summary>
+        public bool CanUndo => history.Count > 0;
 
         /// <summary>Raised after every placement, reset or change of the current board.</summary>
         public event Action Changed;
@@ -158,6 +171,7 @@ namespace Bagels.View
         public void NewGame()
         {
             StopZoom();
+            history.Clear();
             State = new GameState(rules);
             focus = State.Root;
             LastResult = null;
@@ -205,6 +219,8 @@ namespace Bagels.View
         public void Place(Board board, int slot)
         {
             if (IsZooming) return;
+            if (board == null || !board.IsAlive || slot < 0 || slot >= board.SlotCount || !board.IsEmpty(slot)) return;
+            history.Record(board, slot);
             try
             {
                 LastResult = State.PlaceA(board, slot);
@@ -217,6 +233,30 @@ namespace Bagels.View
                 Debug.LogError(e.Message, this);
             }
             Redraw(); // also moves the focus up if a cascade consumed the current board
+            Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Takes back the last A placed, along with every formula it set off. Stays on the current board if it still
+        /// exists afterwards, otherwise moves to its nearest surviving ancestor.
+        /// </summary>
+        public void Undo()
+        {
+            if (!CanUndo) return;
+            StopZoom();
+            var focusPath = PlacementHistory.PathOf(focus);
+            State = history.UndoLast(rules);
+            focus = State.Root;
+            // Walk down the old focus path as far as it still leads to bread.
+            foreach (int slot in focusPath)
+            {
+                var board = focus.Child;
+                if (slot >= board.SlotCount || board.IsEmpty(slot) || !board[slot].IsBread) break;
+                focus = board[slot];
+            }
+            LastResult = null;
+            LastError = null;
+            Redraw();
             Changed?.Invoke();
         }
 
@@ -264,22 +304,48 @@ namespace Bagels.View
             if ((c.transform.position - position).sqrMagnitude > 1e-8f) c.transform.position = position;
         }
 
-        // ---------------------------------------------------------------- pointer: hover and scroll
+        // ---------------------------------------------------------------- pointer: hover, click and scroll
 
         void HandlePointer()
         {
             var mouse = Mouse.current;
-            if (mouse == null || Camera == null || State == null || IsZooming) return;
+            if (mouse == null || Camera == null || State == null) return;
+
+            // Track the press edge ourselves (rather than wasPressedThisFrame) so a press is never missed however
+            // input updates line up with frames. Keep tracking during a zoom so a held button doesn't read as new.
+            bool down = mouse.leftButton.isPressed;
+            bool pressed = down && !pointerWasDown;
+            pointerWasDown = down;
+            if (IsZooming) return;
 
             var es = EventSystem.current;
             bool overUi = es != null && es.IsPointerOverGameObject();
             var world = ScreenToWorld(mouse.position.ReadValue());
             SetBreadHover(overUi ? null : FindBread(world));
+            if (pressed && !overUi) HandleClick(world);
 
             float scroll = mouse.scroll.ReadValue().y;
             if (overUi || Mathf.Abs(scroll) < 0.01f || Time.unscaledTime < scrollReadyTime) return;
             if (scroll > 0f && hoveredBread != null) ZoomIn(hoveredBread.Bread);
             else if (scroll < 0f) ZoomOut();
+        }
+
+        /// <summary>A second click on the same empty slot within <see cref="doubleClickTime"/> places an A there.</summary>
+        void HandleClick(Vector2 world)
+        {
+            var target = FindTarget(world);
+            float now = Time.unscaledTime;
+            if (target != null && target.Board == lastClickBoard && target.Slot == lastClickSlot &&
+                now - lastClickTime <= doubleClickTime)
+            {
+                lastClickBoard = null; // a third click starts a new double click
+                lastClickSlot = -1;
+                Place(target.Board, target.Slot);
+                return;
+            }
+            lastClickBoard = target?.Board;
+            lastClickSlot = target != null ? target.Slot : -1;
+            lastClickTime = now;
         }
 
         BreadTarget FindBread(Vector2 world)

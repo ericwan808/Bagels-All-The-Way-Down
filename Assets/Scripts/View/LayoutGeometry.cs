@@ -22,6 +22,13 @@ namespace Bagels.View
                     return new[] { OnCircle(90f, 1f), OnCircle(210f, 1f), OnCircle(330f, 1f) };
                 case "P3":
                     return new[] { new Vector2(-1f, 0f), Vector2.zero, new Vector2(1f, 0f) };
+                case "K2,3":
+                    // The two-slot side above and below a row of the three-slot side.
+                    return new[]
+                    {
+                        new Vector2(0f, 1f), new Vector2(0f, -1f),
+                        new Vector2(-1.1f, 0f), Vector2.zero, new Vector2(1.1f, 0f),
+                    };
                 default:
                 {
                     var p = new Vector2[layout.SlotCount];
@@ -37,6 +44,7 @@ namespace Bagels.View
             "W7" => 0.34f,
             "K3" => 0.5f,
             "P3" => 0.36f,
+            "K2,3" => 0.34f,
             _ => Mathf.Min(0.4f, Mathf.Sin(Mathf.PI / Mathf.Max(2, layout.SlotCount)) * 0.8f),
         };
 

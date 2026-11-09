@@ -76,18 +76,37 @@ public static class BagelsSetup
         var b = Pastry("B", "B", Symbol.B, new Color(0.96f, 0.75f, 0.40f), LayoutKind.None);
         var c = Pastry("C", "C (bread)", Symbol.C, new Color(0.86f, 0.68f, 0.46f), LayoutKind.K3);
         var d = Pastry("D", "D", Symbol.D, new Color(0.78f, 0.42f, 0.22f), LayoutKind.None);
-        var e = Pastry("E", "E", Symbol.E, new Color(0.45f, 0.24f, 0.13f), LayoutKind.None);
+        var e = Pastry("E", "E (bread)", Symbol.E, new Color(0.45f, 0.24f, 0.13f), LayoutKind.K23);
+        var f = Pastry("F", "F", Symbol.F, new Color(0.62f, 0.80f, 0.55f), LayoutKind.None);
+        var g = Pastry("G", "G", Symbol.G, new Color(0.40f, 0.62f, 0.78f), LayoutKind.None);
+        var h = Pastry("H", "H (bread)", Symbol.H, new Color(0.74f, 0.58f, 0.82f), LayoutKind.W7);
+        var i = Pastry("I", "I", Symbol.I, new Color(0.88f, 0.52f, 0.62f), LayoutKind.None);
+        var j = Pastry("J", "J", Symbol.J, new Color(0.95f, 0.78f, 0.20f), LayoutKind.None);
 
-        var fb = Formula("Formula B", b, new[] { (a, false), (a, false) }, (0, 1, AdjacencyKind.Normal));
-        var fc = Formula("Formula C", c, new[] { (b, false), (b, false) }, (0, 1, AdjacencyKind.Normal));
-        var fd = Formula("Formula D", d, new[] { (a, false), (a, false), (b, false) },
-                         (0, 1, AdjacencyKind.Normal), (1, 2, AdjacencyKind.Normal), (0, 2, AdjacencyKind.Normal));
-        var fe = Formula("Formula E", e, new[] { (b, true), (d, false), (d, false) },
-                         (0, 1, AdjacencyKind.Down), (0, 2, AdjacencyKind.Down));
+        // Each formula mirrors the explicit node/edge form in design.md. There, "x<y" means x sits one level
+        // below y, so y is Up from x; "x>y" means y is Down from x.
+        const AdjacencyKind N = AdjacencyKind.Normal, Up = AdjacencyKind.Up, Dn = AdjacencyKind.Down;
+        var fb = Formula("Formula B", b, new[] { (a, false), (a, false) }, (0, 1, N));                     // A A | 0-1
+        var fc = Formula("Formula C", c, new[] { (b, false), (b, false) }, (0, 1, N));                     // B B | 0-1
+        var fd = Formula("Formula D", d, new[] { (a, false), (b, false), (a, false) },
+                         (0, 1, N), (1, 2, N), (0, 2, N));                                                 // A B A | 0-1 1-2 0-2
+        var fe = Formula("Formula E", e, new[] { (d, false), (a, false), (d, false) },
+                         (0, 1, Up), (1, 2, Dn));                                                          // D A D | 0<1 1>2
+        var ff = Formula("Formula F", f, new[] { (b, false), (c, true), (b, false) },
+                         (0, 1, N), (1, 2, N));                                                            // B [C] B | 0-1 1-2
+        var fg = Formula("Formula G", g, new[] { (f, false), (b, false), (f, false) },
+                         (0, 1, N), (1, 2, N));                                                            // F B F | 0-1 1-2
+        var fh = Formula("Formula H", h, new[] { (b, false), (g, false), (b, false) },
+                         (0, 1, Dn), (1, 2, Up));                                                          // B G B | 0>1 1<2
+        var fi = Formula("Formula I", i, new[] { (f, false), (g, false), (f, false) },
+                         (0, 1, Dn), (1, 2, Up), (0, 2, N));                                               // F G F | 0>1 1<2 0-2
+        var fj = Formula("Formula J", j, new[] { (a, false), (a, false), (i, true) },
+                         (0, 1, Dn), (1, 2, Dn));                                                          // A A [I] | 0>1 1>2
 
         var level = Load<LevelAsset>($"{DataDir}/Test Set.asset");
-        // Most specific first: D's final A would otherwise be taken by A+A->B.
-        level.EditorInit(root, e, a, new[] { fd, fe, fc, fb });
+        // Checked in reverse product order (see design.md), so later formulas win. E.g. D's final A would otherwise
+        // be taken by A+A->B.
+        level.EditorInit(root, j, a, new[] { fj, fi, fh, fg, ff, fe, fd, fc, fb });
         EditorUtility.SetDirty(level);
         return level;
     }

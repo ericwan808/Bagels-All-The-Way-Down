@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8984071b344aa48458b433d4c95095cd, type: 3}
   m_Name: Pastry E
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
-  displayName: E
+  displayName: E (bread)
   symbol: 4
   sprite: {fileID: 0}
   color: {r: 0.45, g: 0.24, b: 0.13, a: 1}
-  layout: 0
+  layout: 4

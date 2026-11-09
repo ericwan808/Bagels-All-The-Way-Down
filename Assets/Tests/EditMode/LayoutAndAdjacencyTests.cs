@@ -32,6 +32,20 @@ namespace Bagels.Core.Tests
         }
 
         [Test]
+        public void K23_IsCompleteBipartite()
+        {
+            var k23 = BoardLayout.K23;
+            Assert.AreEqual(5, k23.SlotCount);
+            foreach (int a in new[] { 0, 1 })
+                foreach (int b in new[] { 2, 3, 4 })
+                    Assert.IsTrue(k23.AreAdjacent(a, b), $"{a}-{b}");
+            Assert.IsFalse(k23.AreAdjacent(0, 1));
+            Assert.IsFalse(k23.AreAdjacent(2, 3));
+            Assert.IsFalse(k23.AreAdjacent(3, 4));
+            Assert.IsFalse(k23.AreAdjacent(2, 4));
+        }
+
+        [Test]
         public void K3_IsATriangle()
         {
             var k3 = BoardLayout.K3;

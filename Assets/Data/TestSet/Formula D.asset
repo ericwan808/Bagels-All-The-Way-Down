@@ -15,9 +15,9 @@ MonoBehaviour:
   ingredients:
   - type: {fileID: 11400000, guid: 80f9d894f0d69a346b34943e46dad881, type: 2}
     catalyst: 0
-  - type: {fileID: 11400000, guid: 80f9d894f0d69a346b34943e46dad881, type: 2}
-    catalyst: 0
   - type: {fileID: 11400000, guid: 5c3f1bb92a05f434c90dd0ba119c118c, type: 2}
+    catalyst: 0
+  - type: {fileID: 11400000, guid: 80f9d894f0d69a346b34943e46dad881, type: 2}
     catalyst: 0
   links:
   - from: 0

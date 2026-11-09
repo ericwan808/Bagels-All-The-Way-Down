@@ -13,17 +13,17 @@ MonoBehaviour:
   m_Name: Formula E
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.FormulaAsset
   ingredients:
-  - type: {fileID: 11400000, guid: 5c3f1bb92a05f434c90dd0ba119c118c, type: 2}
-    catalyst: 1
   - type: {fileID: 11400000, guid: ce7cf35793ef2e940a867bc673bb58ee, type: 2}
+    catalyst: 0
+  - type: {fileID: 11400000, guid: 80f9d894f0d69a346b34943e46dad881, type: 2}
     catalyst: 0
   - type: {fileID: 11400000, guid: ce7cf35793ef2e940a867bc673bb58ee, type: 2}
     catalyst: 0
   links:
   - from: 0
     to: 1
-    kind: 1
-  - from: 0
+    kind: 2
+  - from: 1
     to: 2
     kind: 1
   product: {fileID: 11400000, guid: 693def5913977e742b802479c7ba6c94, type: 2}

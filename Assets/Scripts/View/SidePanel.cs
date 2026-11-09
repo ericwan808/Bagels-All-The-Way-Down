@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text;
 using Bagels.Core;
+using Bagels.Data;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -9,8 +10,8 @@ using UnityEngine.UI;
 namespace Bagels.View
 {
     /// <summary>
-    /// Left-hand panel: goal, which board is being viewed, the A spawner, a diagram of every formula, a legend, the last cascade and a reset
-    /// button. Built in code on a screen-space canvas scaled to a 1080-pixel-tall reference. Editor tooling saves the
+    /// Left-hand panel: goal, which board is being viewed, the A spawner, a scrolling list with a diagram of every
+    /// formula, a legend, the last cascade, and undo and reset buttons. Built in code on a screen-space canvas scaled to a 1080-pixel-tall reference. Editor tooling saves the
     /// built panel into the scene, so every reference it needs at runtime is serialized.
     /// </summary>
     public sealed class SidePanel : MonoBehaviour
@@ -19,6 +20,11 @@ namespace Bagels.View
         const float ReferenceHeight = 1080f;
         const float Pad = 24f;
         const float Gap = 6f;
+        const float LegendHeight = 96f;
+        const float StatusHeight = 56f;
+        const float ResetHeight = 44f;
+        const float FormulaIcon = 38f;
+        const float ScrollbarWidth = 10f;
 
         static readonly Color Background = new Color(0.24f, 0.17f, 0.12f);
         static readonly Color Muted = new Color(0.85f, 0.78f, 0.68f);
@@ -28,6 +34,7 @@ namespace Bagels.View
         [SerializeField] Text status;
         [SerializeField] Text viewing;
         [SerializeField] Button resetButton;
+        [SerializeField] Button undoButton;
         RectTransform panel;
         float cursor;
         bool hooked;
@@ -76,6 +83,7 @@ namespace Bagels.View
             if (hooked || view == null || !Application.isPlaying) return;
             view.Changed += Refresh;
             if (resetButton != null) resetButton.onClick.AddListener(view.NewGame);
+            if (undoButton != null) undoButton.onClick.AddListener(view.Undo);
             hooked = true;
             Refresh();
         }
@@ -85,6 +93,7 @@ namespace Bagels.View
             if (!hooked) return;
             if (view != null) view.Changed -= Refresh;
             if (resetButton != null && view != null) resetButton.onClick.RemoveListener(view.NewGame);
+            if (undoButton != null && view != null) undoButton.onClick.RemoveListener(view.Undo);
             hooked = false;
         }
 
@@ -122,7 +131,7 @@ namespace Bagels.View
 
             // Spawner.
             var spawnBlock = Block("Spawner", 140f);
-            var spawnLabel = UiFactory.Text("Hint", spawnBlock, $"Drag a new {level.Basic.Symbol} onto the board", 20, Muted);
+            var spawnLabel = UiFactory.Text("Hint", spawnBlock, $"Drag out an {level.Basic.Symbol}, or double-click a slot", 19, Muted);
             Place(spawnLabel.rectTransform, Vector2.zero, new Vector2(Width - 2 * Pad, 28f));
             var halo = UiFactory.Image("Halo", spawnBlock, view.RingSprite, Muted, new Vector2(112f, 112f));
             At(halo.rectTransform, new Vector2((Width - 2 * Pad) * 0.5f, -84f));
@@ -136,24 +145,90 @@ namespace Bagels.View
                                         TextAnchor.MiddleLeft, FontStyle.Bold);
             UiFactory.Fill(header.rectTransform);
 
-            foreach (var formula in level.Formulas.Where(f => f != null).OrderBy(f => f.Product.Symbol))
-            {
-                var row = Block($"Formula {formula.Product.Symbol}", 108f);
-                var diagramBox = UiFactory.Rect("Pattern", row, new Vector2(230f, 104f));
-                At(diagramBox, new Vector2(115f, -54f));
-                FormulaDiagram.Build(diagramBox, formula, view, 38f);
+            // The list takes whatever height the fixed blocks below it leave over.
+            float below = LegendHeight + StatusHeight + ResetHeight + 2f * Gap + Pad;
+            BuildFormulaList(Block("Formulas", ReferenceHeight - cursor - below - Gap), level);
 
-                var arrow = UiFactory.Text("Yields", row, "=", 34, Muted, TextAnchor.MiddleCenter, FontStyle.Bold);
-                Place(arrow.rectTransform, new Vector2(236f, 0f), new Vector2(40f, 108f));
-                At(UiFactory.PastryIcon(row, formula.Product, 64f, view), new Vector2(322f, -54f));
-            }
+            BuildLegend(Block("Legend", LegendHeight));
 
-            BuildLegend(Block("Legend", 96f));
-
-            status = UiFactory.Text("Status", Block("Status", 56f), "", 20, Muted);
+            status = UiFactory.Text("Status", Block("Status", StatusHeight), "", 20, Muted);
             UiFactory.Fill(status.rectTransform);
 
-            BuildResetButton(Block("Reset", 44f));
+            var buttons = Block("Buttons", ResetHeight);
+            undoButton = BuildButton(buttons, "Undo", 0f);
+            resetButton = BuildButton(buttons, "Reset", 166f);
+        }
+
+        /// <summary>Formulas ordered by product so they read B, C, D... top to bottom, scrolling when they overflow.</summary>
+        void BuildFormulaList(RectTransform block, LevelAsset level)
+        {
+            // Viewport: masks the rows and gives the scroll wheel something to hit.
+            var hit = UiFactory.Image("Viewport", block, null, Color.clear, Vector2.zero);
+            hit.raycastTarget = true;
+            var viewport = hit.rectTransform;
+            UiFactory.Fill(viewport);
+            viewport.offsetMax = new Vector2(-(ScrollbarWidth + 4f), 0f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+
+            var content = UiFactory.Rect("Content", viewport, Vector2.zero);
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0f, 1f);
+
+            float y = 0f;
+            foreach (var formula in level.Formulas.Where(f => f != null).OrderBy(f => f.Product.Symbol))
+            {
+                // Two rows of icons fit the base height; each extra vertical level adds one row gap.
+                float height = 108f + Mathf.Max(0, FormulaDiagram.Rows(formula) - 2) * FormulaIcon * 1.5f;
+                var row = UiFactory.Rect($"Formula {formula.Product.Symbol}", content, Vector2.zero);
+                Place(row, new Vector2(0f, y), new Vector2(Width - 2 * Pad - ScrollbarWidth - 4f, height));
+                y += height + Gap;
+
+                var diagramBox = UiFactory.Rect("Pattern", row, new Vector2(230f, height - 4f));
+                At(diagramBox, new Vector2(115f, -height * 0.5f));
+                FormulaDiagram.Build(diagramBox, formula, view, FormulaIcon);
+
+                var arrow = UiFactory.Text("Yields", row, "=", 34, Muted, TextAnchor.MiddleCenter, FontStyle.Bold);
+                Place(arrow.rectTransform, new Vector2(236f, 0f), new Vector2(40f, height));
+                At(UiFactory.PastryIcon(row, formula.Product, 64f, view), new Vector2(322f, -height * 0.5f));
+            }
+            content.offsetMin = new Vector2(0f, -Mathf.Max(0f, y - Gap));
+            content.offsetMax = Vector2.zero;
+
+            var scroll = block.gameObject.AddComponent<ScrollRect>();
+            scroll.viewport = viewport;
+            scroll.content = content;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = false;
+            scroll.scrollSensitivity = 40f;
+            scroll.verticalScrollbar = BuildScrollbar(block);
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+        }
+
+        Scrollbar BuildScrollbar(RectTransform block)
+        {
+            var track = UiFactory.Image("Scrollbar", block, null, ViewColors.Darken(Muted, 0.6f), Vector2.zero);
+            track.raycastTarget = true;
+            var rt = track.rectTransform;
+            rt.anchorMin = new Vector2(1f, 0f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.sizeDelta = new Vector2(ScrollbarWidth, 0f);
+            rt.anchoredPosition = Vector2.zero;
+
+            var area = UiFactory.Rect("Sliding Area", rt, Vector2.zero);
+            UiFactory.Fill(area);
+            var handle = UiFactory.Image("Handle", area, null, Muted, Vector2.zero);
+            handle.raycastTarget = true;
+            UiFactory.Fill(handle.rectTransform);
+
+            var bar = track.gameObject.AddComponent<Scrollbar>();
+            bar.handleRect = handle.rectTransform;
+            bar.targetGraphic = handle;
+            bar.direction = Scrollbar.Direction.BottomToTop;
+            return bar;
         }
 
         void BuildLegend(RectTransform block)
@@ -190,21 +265,23 @@ namespace Bagels.View
             }
         }
 
-        void BuildResetButton(RectTransform block)
+        static Button BuildButton(RectTransform block, string text, float x)
         {
-            var img = UiFactory.Image("Reset Button", block, null, ViewColors.Darken(Muted, 0.35f), new Vector2(150f, 44f));
+            var img = UiFactory.Image($"{text} Button", block, null, ViewColors.Darken(Muted, 0.35f), new Vector2(150f, ResetHeight));
             img.raycastTarget = true;
-            Place(img.rectTransform, Vector2.zero, new Vector2(150f, 44f));
-            resetButton = img.gameObject.AddComponent<Button>();
-            resetButton.targetGraphic = img;
-            var label = UiFactory.Text("Label", img.rectTransform, "Reset", 22, ViewColors.Paper, TextAnchor.MiddleCenter, FontStyle.Bold);
+            Place(img.rectTransform, new Vector2(x, 0f), new Vector2(150f, ResetHeight));
+            var button = img.gameObject.AddComponent<Button>();
+            button.targetGraphic = img;
+            var label = UiFactory.Text("Label", img.rectTransform, text, 22, ViewColors.Paper, TextAnchor.MiddleCenter, FontStyle.Bold);
             UiFactory.Fill(label.rectTransform);
+            return button;
         }
 
         void Refresh()
         {
             if (status == null || view == null) return;
             if (viewing != null) viewing.text = "Viewing: " + view.FocusPath();
+            if (undoButton != null) undoButton.interactable = view.CanUndo;
             var state = view.State;
             var target = view.Level.Target;
 

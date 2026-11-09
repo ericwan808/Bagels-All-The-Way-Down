@@ -46,5 +46,9 @@ namespace Bagels.Core
 
         /// <summary>Triangle: three mutually adjacent slots.</summary>
         public static BoardLayout K3 { get; } = new BoardLayout("K3", 3, new[] { (0, 1), (1, 2), (0, 2) });
+
+        /// <summary>Complete bipartite K2,3: slots 0–1 are each adjacent to all of slots 2–4, and to nothing else.</summary>
+        public static BoardLayout K23 { get; } = new BoardLayout("K2,3", 5,
+            new[] { 0, 1 }.SelectMany(a => new[] { 2, 3, 4 }.Select(b => (a, b))));
     }
 }
