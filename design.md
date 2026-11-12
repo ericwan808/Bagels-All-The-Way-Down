@@ -1,52 +1,93 @@
 ## Design Document for Bagels All The Way Down
-### Introduction
-This is a design document for a Unity puzzle game. The goal is to craft a certain bagel by placing elements (bagels) in slots on a board (bread). The board is recursive in the sense that boards can be placed within the slots of other boards. Bagels and bread are crafted by satisfying formulas, which require other bagels and bread to be adjacent to each other in a certain pattern.
 
-Formulas will automatically trigger and return the result into the most recently placed location. When cascades occur, this rule holds and the entire cascading chain will land where the player just placed an element. Components cannot be moved once placed or created on the board. A formula might require that A is adjacent to another A to create B. This consumes both As. An element is considered vertically adjacent to the children of an adjacent board. Certain formulas will produce new boards as their output. Boards may be used as elements in some formulas, so in essence a board is just a special element that can hold other elements. Some formulas will have catalysts. In the case that the catalyst is placed last, it will be consumed. Otherwise, the catalyst will not be consumed.
+### Overview
+Bagels All The Way Down is a Unity puzzle game. The goal is to craft a final target bagel by placing elements (bagels) in the slots of a board (bread). Boards are recursive: a board is a special element that can itself be placed in a slot of another board and hold elements of its own.
 
-Players will start with an infinite amount of "A"s from which to create the other elements.
+Bagels and breads are crafted by satisfying formulas. A formula requires certain bagels and breads to be adjacent to each other in a specific pattern. The player earns money by fulfilling orders, and uses that money to buy components and unlock new formulas on the way to the final bagel.
+
+### Core rules
+
+#### Boards
+- Each type of board has its own slot layout: C is K3 (a triangle), E is K2,3, and H is W7 (a hub plus 6 slots around it).
+- The root of the game is a W7 board.
+- Elements cannot be moved once they are placed or created on the board. The only exception is dragging them to an order tray (see Orders).
+- An undo button reverts the player's most recent placement. A placement is an element the player placed themselves, not a product created by a formula. Undoing a placement also reverts the cascade it triggered. Undo goes back at most 10 placements from the current state.
+
+#### Adjacency
+- **Normal adjacency**: two elements in neighbouring slots of the same board.
+- **Vertical adjacency** has a direction, and only reaches one level:
+  - **Down**: an element is adjacent to every child of a board in a neighbouring slot.
+  - **Up**: an element is adjacent to every element in a slot next to the board it sits in.
+- The children of two adjacent boards are not adjacent to each other.
+- Formulas distinguish between normal and vertical adjacency, and they specify the direction of each vertical link.
+
+#### Formulas
+- A formula is a pattern of adjacencies that must all be satisfied. It can be a chain, including vertical links, or a more complex shape like a triangle.
+- Satisfying a formula consumes its ingredients. For example, A adjacent to another A creates B and consumes both As.
+- Some formulas produce new boards, and boards can be ingredients in other formulas. When a board is used as an ingredient, its children are destroyed. Its contents do not matter to the formula.
+- **Catalysts**: some formulas have a catalyst ingredient. If the catalyst was the last element placed, it is consumed and replaced by the product. Otherwise it is not consumed, and if it is a board, its children stay.
+- **Priority**: when more than one formula matches, the one furthest down the formula list fires. For example, an A that completes D's triangle would also satisfy `A-A` for B. D is lower in the list, so D fires.
+- **Ties**: if a formula can be satisfied by more than one set of elements, the first set found is used. The search runs in slot order on each board, so the result is deterministic.
+
+#### Placement and cascades
+- The game always tracks a "most recent element", which is either the element the player just placed or the product a formula just created. Only formulas that involve the most recent element are checked.
+- Formulas trigger automatically and put their product in the most recent element's location. During a cascade, each product becomes the new most recent element, so the whole chain lands in the slot where the player last placed an element.
+- A product may end up on a different board than its ingredients.
+
+### Economy
+
+#### Money and purchasing
+- The player starts with $0. They are meant to earn their first money by crafting and selling Bs and Cs, and to buy a component directly only when it is hard to make through formulas.
+- A is free, and the player can place as many as they like.
+- Every unlocked component with a price, boards included, can be bought and placed in any empty slot on any board. To buy one, the player drags its icon out of its formula in the side panel.
+- Components with no price (K and L) can never be bought. They can only be crafted.
+
+#### Unlocking formulas
+- At the start, the player has only As and knows the formulas for B and C.
+- Formulas unlock in the order of the formula list. The next formula is revealed as soon as the player's current money reaches that component's price. Unlocking a formula also lets the player buy that component.
+- F is a special case: it unlocks at the same time as E.
+- A component with no price has its formula revealed once the component before it in the list is created on the board by a formula. Buying that component does not count. K unlocks when a J is first crafted, and L unlocks when K is first crafted.
+
+### Orders
+- Orders are the only source of money. Each order asks for a specific set of bagels and breads. A bread in an order can require specific contents, including nested breads with their own contents. For example, an order might pay $15 for a B and a C containing an A and a B.
+- Matching is strict: a bread must contain exactly the listed contents, with nothing extra.
+- To fulfill an order, the player drags matching components from the board to that order's tray. An order can be filled one item at a time, but each item goes in as one unit. In the example, the B and the "C containing an A and a B" can be added separately, but the C goes in together with its contents.
+- An order has at most 5 items.
+- Orders only ask for bagels and breads that are currently available.
+- The total cost of the items in an order must not be more than twice the order's reward. In the example above, the items cost $25 and the order pays $15.
+- The game starts with 1 order, and at most 3 orders are active at a time.
+- When an order is fulfilled, a replacement order is generated right away. If fewer than 3 orders are active after that, one more is added.
+
+### Winning
+- The final target bagel (L) can be crafted anywhere on the board.
+- As soon as L's formula is unlocked, a special order appears that asks only for L. Fulfilling that order wins the game.
+
+### User interface
+
+#### Side panel
+- The UI is built on a Canvas. A side panel shows the unlocked formulas.
+- The formulas are split across multiple pages instead of one scrolling list.
+- Each formula's product icon can be dragged onto the board to buy that component. The panel also has an A icon that spawns a free A to drag onto the board.
+- A greyed-out rectangle stands in for the next component to unlock and shows its unlock condition.
+
+#### Board navigation
+- Only items up to two levels below the current board are shown. For example, if board H contains a board C, which contains an element A and another board C holding an element B, every icon is shown except B.
+- Hovering over a board inside the current board highlights it to show that the player can scroll up on it. Scrolling up zooms into that board, which becomes the new current board.
+- Scrolling down zooms out to the parent board. On the root board this does nothing.
+- Zooming does not move the camera. Instead, the parent board and the sibling elements move to the side, out of view, and the target child expands to fill the view.
+- Once that works, add zoom-in and zoom-out animations in which the parent board gradually fades out or in.
 
 ### Technical design
-There will be a Pastry object that will have a name, a symbol code enum (just letters of the alphabet for now), and a sprite.
-Bread is a special case of a Pastry object that will contain its own Graph object.
-A Graph object will have a series of "slots" in a particular adjacency pattern which can be filled by Pastry instances.
-When a Pastry object is placed into a Graph's slots, it will check whether a formula is satisfied. Note that we only need to check formulas involving the most recently place or created Pastry.
-There will be a global list of formulas to check.
-
-Overall, the structure will be similar to a tree with a root that is a Pastry Object with a Graph that is W7.
-In Unity, these Pastries should be Prefabs that can be instantiated multiple times.
-
-### User Interface
-Use the canvas object to create the user interface. There will be a side panel with a list of formulas. This side panel should also contain a A object icon that spawns a new A object which can be dragged onto the board when clicked.
-
-Only show items "two levels down" from the current board. That is to say, if board H contains (board C contains (element A and board C contains(element B))), all icons sould be showing except element B. When the user hovers over a board contained in the current board and scrolls up, the screen should zoom in onto that board which then becomes the new current board. When hovering over a board contained in the current board, it should highlight to indicate it can be scrolled up on. Scrolling down on the current board will zoom out to its parent unless it is the root in which case this does nothing.
-
-To implement this zoom in, you should not literally zoom in the camera. Instead, temporarily move the parent board and the other sibling elements to the side out of view and expand the child we want to zoom in on.
-
-Once this is working, you can start working on showing a zoom in and zoom out animation by making the parent board gradually transparent.
-
-### Specifications
-A pattern is a series of adjacencies that must be satisfied. This could be a chain of adjacencies (including vertical adjacencies), or it could be more complex like a triangle. 
-When more than one match fires, we will use the one first in the list. Formulas should therefore be listed most-specific first (e.g. D's triangle is completed by an A that would also satisfy A+A->B, so D must come before B).
-
-To the game, there will always be a "most recent element", whether that was placed by the player or created by a previous formula. This is what can trigger new formulas. If it is a catalyst, it will be consumed and replaced with the formula's product.
-
-Vertical adjacency applies to all children in a board. It only works one level down and its direction (up/parent or down/child) is specified in the formula.
-
-The formula will differentiate between normal adjacency and vertical adjacency.
-
-It is okay for the formula product to end up on a different board than its ingredients.
-
-When a board is used as an ingredient, its children are simply destoryed. Its content does not matter for the formula.
-Different types of boards will have different slot layouts (P3 and W7 to name a few, W7 is a hub plus 6 around it)
-
-The target bagel can appear anywhere. As can go to any empty slot.
-
-Keep the game logic separate from the visuals. Pastry types and formulas fit well as ScriptableObjects: data assets for name, symbol, sprite and recipe. The board state is easiest as plain C# (graph, slots, matching, cascades), with prefabs only for display. That makes cascades testable without the Unity scene, and lets animations play after the logic has finished.
+- **Pastry**: has a name, a symbol code enum (letters of the alphabet for now) and a sprite. In Unity, pastries are prefabs that can be instantiated many times.
+- **Bread**: a special case of Pastry that contains its own Graph.
+- **Graph**: a set of slots in a particular adjacency pattern. Each slot can hold a Pastry instance.
+- The overall structure is a tree. Its root is a Pastry whose Graph is a W7.
+- There is one global list of formulas. When a Pastry is placed into a slot, the game checks only the formulas that involve the most recently placed or created Pastry.
+- Keep the game logic separate from the visuals. Pastry types and formulas work well as ScriptableObjects: data assets that hold the name, symbol, sprite and recipe. The board state (graph, slots, matching, cascades) is plain C#, with prefabs used only for display. This makes cascades testable without the Unity scene and lets animations play after the logic has finished.
 
 ### Formulas
 
-#### Text notation (developer-facing only)
+#### Text notation
 Formulas are small graphs: ingredients are nodes and required adjacencies are edges. They are written in one of two forms.
 
 **Condensed form** (modeled on chemistry's SMILES notation):
@@ -64,18 +105,21 @@ Formulas are small graphs: ingredients are nodes and required adjacencies are ed
 - Example: `A B A | 0-1 1-2 0-2`.
 
 #### Formula list
-Listed in product order. Two rules keep the list consistent:
+Listed in product order, which is also the unlock order. Two rules keep the list consistent:
 - A formula only uses elements that come before its product in this list.
-- When more than one formula matches, the game checks them from the bottom of this table up (J first, B last), and the first match fires.
+- When more than one formula matches, the game checks them from the bottom of this table up (L first, B last), and the first match fires.
 
-| # | Product | Condensed formula | Explicit node/edge formula |
-|---|---|---|---|
-| 1 | B | `A-A` | `A A \| 0-1` |
-| 2 | C (board, K3 triangle) | `B-B` | `B B \| 0-1` |
-| 3 | D | `A1-B-A-1` | `A B A \| 0-1 1-2 0-2` |
-| 4 | E (board, K2,3) | `D<A>D` | `D A D \| 0<1 1>2` |
-| 5 | F | `B-[C]-B` | `B [C] B \| 0-1 1-2` |
-| 6 | G | `F-B-F` | `F B F \| 0-1 1-2` |
-| 7 | H (board, W7) | `B>G<B` | `B G B \| 0>1 1<2` |
-| 8 | I | `F1>G<F-1` | `F G F \| 0>1 1<2 0-2` |
-| 9 | J | `A>A>[I]` | `A A [I] \| 0>1 1>2` |
+| Product  | Name                                     | Price    | Condensed formula | Explicit node/edge formula |
+| -------- | ---------------------------------------- | -------- | ----------------- | -------------------------- |
+| A        | Everything bagel                         | 0        | no formula        |                            |
+| B        | Everything bagel + Cream cheese          | 5        | `A-A`             | `A A \| 0-1`               |
+| C (K3)   | Slice of wonderbread                     | 15       | `B-B`             | `B B \| 0-1`               |
+| D        | Everything everything bagel              | 20       | `A1-B-A-1`        | `A B A \| 0-1 1-2 0-2`     |
+| E (K2,3) | Croissant                                | 50       | `D<A>D`           | `D A D \| 0<1 1>2`         |
+| F        | Dharma bagel                             | 30       | `B-[C]-B`         | `B [C] B \| 0-1 1-2`       |
+| G        | Earth bagel                              | 75       | `F-B-F`           | `F B F \| 0-1 1-2`         |
+| H (W7)   | Na'an                                    | 100      | `B>G<B`           | `B G B \| 0>1 1<2`         |
+| I        | Black hole bagel                         | 150      | `F1>G<F-1`        | `F G F \| 0>1 1<2 0-2`     |
+| J        | Galaxy bagel                             | 400      | `D>G>[I]<G<D`     | `D G [I] G D \| 0>1 1>2 2<3 3<4` |
+| K        | Bagel on a turtle on a bagel on a turtle | No price | `J1-J>F-F<J-J>F-F<1` | `J J F F J J F F \| 0-1 1>2 2-3 3<4 4-5 5>6 6-7 7<0` |
+| L        | True plain bagel                         | No price | `K>J>I(-G>F1(>D>B(-A)(-A))(>D>B(-A)(-A)))(-G>1)` | `K J I G G F D D A B A A B A \| 0>1 1>2 2-3 2-4 3>5 4>5 5>6 5>7 6>9 7>12 9-8 9-10 12-11 12-13` |

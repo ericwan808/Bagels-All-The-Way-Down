@@ -1,2 +1,9 @@
 ﻿<Solution>
+  <Project Path="Bagels.View.csproj" />
+  <Project Path="Bagels.Core.Tests.csproj" />
+  <Project Path="Bagels.Core.csproj" />
+  <Project Path="Bagels.Data.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="Bagels.View.Tests.csproj" />
 </Solution>
