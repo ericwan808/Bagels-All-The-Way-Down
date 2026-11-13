@@ -105,6 +105,9 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - Zooming does not move the camera. Instead, the parent board and the sibling elements move to the side, out of view, and the target child expands to fill the view.
 - Once that works, add zoom-in and zoom-out animations in which the parent board gradually fades out or in.
 
+#### Audio
+- The main theme (`Assets/Resources/Audio/BATWD_01_MainTheme.ogg`) loops in the background for the whole session. It fades in from silence over about 3 seconds when the game begins, and keeps playing when a new game starts.
+
 ### Technical design
 - **Pastry**: has a name, a symbol code enum (letters of the alphabet for now) and a sprite. In Unity, pastries are prefabs that can be instantiated many times.
 - **Bread**: a special case of Pastry that contains its own Graph.
