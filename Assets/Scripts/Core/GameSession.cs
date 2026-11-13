@@ -27,7 +27,8 @@ namespace Bagels.Core
     /// </para>
     /// <para>
     /// Orders reward components and a tip in money, which extra toppings cut. Given components go to a stock;
-    /// placing a component uses a stocked one for free before buying one. Only money counts towards unlocks.
+    /// placing a component uses a stocked one for free before buying one. Formulas are bought with money; stock
+    /// can't pay for them.
     /// </para>
     /// </summary>
     public sealed class GameSession
@@ -79,6 +80,26 @@ namespace Bagels.Core
         /// <summary>True if the player can buy <paramref name="symbol"/> now: unlocked, priced, and affordable.</summary>
         public bool CanBuy(Symbol symbol) =>
             Progress.IsUnlocked(symbol) && Rules.PriceOf(symbol) is int price && Money >= price;
+
+        /// <summary>True if the next formula is one that is bought, and the player has the money for it.</summary>
+        public bool CanBuyNextFormula => !Won && Progress.NextFormulaPrice is int price && Money >= price;
+
+        /// <summary>
+        /// Buys the next formula for its component's price, unlocking it (and any that come with it, like F with E).
+        /// Unlocks are never taken back, so undo keeps the formula: every undo snapshot is charged the price too, and
+        /// undoing still refunds only placements. Throws if the formula can't be bought now.
+        /// </summary>
+        public void BuyNextFormula()
+        {
+            if (!CanBuyNextFormula) throw new InvalidOperationException("The next formula can't be bought right now.");
+            int price = Progress.NextFormulaPrice.Value;
+            Money -= price;
+            // A snapshot's money is at least the money now (placements since then only spent), so this stays >= 0.
+            for (int i = 0; i < undo.Count; i++) undo[i] = (undo[i].state, undo[i].money - price, undo[i].stock);
+            var gained = Progress.Purchase();
+            CheckFinalOrder();
+            LastUnlocked = gained;
+        }
 
         /// <summary>How many free copies of <paramref name="symbol"/> order rewards have put in stock.</summary>
         public int StockOf(Symbol symbol) => stock.TryGetValue(symbol, out int n) ? n : 0;
@@ -163,7 +184,6 @@ namespace Bagels.Core
                 return DeliveryOutcome.Won;
             }
 
-            RefreshUnlocks(); // the reward may unlock components, which new orders can then ask for
             // The orders below move up, and the replacement joins the bottom of the docket.
             AddOrder();
             if (RegularOrderCount < MaxOrders) AddOrder();
@@ -178,11 +198,18 @@ namespace Bagels.Core
             if (order != null) orders.Add(order);
         }
 
-        /// <summary>For tests: adds money (or, with 0, just re-checks unlocks) as if an order had paid it.</summary>
+        /// <summary>For tests: adds money (or, with 0, just re-checks crafting unlocks) as if an order had paid it.</summary>
         internal void GrantMoney(int amount)
         {
             Money += amount;
             RefreshUnlocks();
+        }
+
+        /// <summary>For tests: unlocks formulas as if every one priced up to <paramref name="budget"/> had been bought, without paying.</summary>
+        internal void UnlockUpTo(int budget)
+        {
+            LastUnlocked = Progress.UnlockUpTo(budget);
+            CheckFinalOrder();
         }
 
         /// <summary>For tests: adds a hand-made order to the active ones.</summary>
@@ -198,7 +225,12 @@ namespace Bagels.Core
 
         void RefreshUnlocks()
         {
-            LastUnlocked = Progress.Update(Money);
+            LastUnlocked = Progress.Update();
+            CheckFinalOrder();
+        }
+
+        void CheckFinalOrder()
+        {
             // As soon as the target's formula is unlocked, a special order asks for it alone.
             if (!finalOrderAdded && Rules.Target is Symbol target && Progress.IsUnlocked(target))
             {

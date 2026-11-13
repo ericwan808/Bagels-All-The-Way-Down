@@ -117,11 +117,11 @@ namespace Bagels.Core
     /// </summary>
     public sealed class Order
     {
-        public const int MaxItems = 5;
+        public const int MaxItems = 3;
         /// <summary>At this many imperfections the tip is gone.</summary>
         public const int ImperfectionsToLoseTip = 5;
-        /// <summary>The share of the tip left after the first imperfection; it falls evenly from there to nothing.</summary>
-        public const double TipAfterFirstImperfection = 0.2;
+        /// <summary>The share of the tip earned with 0, 1, 2, ... extra toppings, up to <see cref="ImperfectionsToLoseTip"/>.</summary>
+        static readonly double[] TipShares = { 1.0, 0.6, 0.3, 0.1, 0.05, 0.0 };
 
         readonly bool[] filled;
 
@@ -166,15 +166,14 @@ namespace Bagels.Core
         }
 
         /// <summary>
-        /// The tip after <paramref name="imperfections"/> extra toppings: all of it for none, 20% for one, then
-        /// evenly down to nothing at <see cref="ImperfectionsToLoseTip"/>.
+        /// The tip after <paramref name="imperfections"/> extra toppings: all of it for none, then 60%, 30%, 10%
+        /// and 5%, and nothing from <see cref="ImperfectionsToLoseTip"/> on.
         /// </summary>
         public int TipAfter(int imperfections)
         {
             if (imperfections <= 0) return Tip;
             if (imperfections >= ImperfectionsToLoseTip) return 0;
-            double share = TipAfterFirstImperfection * (ImperfectionsToLoseTip - imperfections) / (ImperfectionsToLoseTip - 1);
-            return (int)Math.Round(Tip * share);
+            return (int)Math.Round(Tip * TipShares[imperfections]);
         }
 
         /// <summary>
@@ -222,7 +221,7 @@ namespace Bagels.Core
 
     /// <summary>
     /// Makes random orders from what is currently unlocked and priced (design.md, "Orders"): at most five items, a
-    /// reward worth about two thirds of the total item cost (components plus a tip), bread nested no deeper than each bread's limit and filled only as
+    /// reward worth about the total item cost (components plus a tip), bread nested no deeper than each bread's limit and filled only as
     /// its <see cref="ContentRules"/> allow, and only contents that can actually be built, i.e. that have an arrangement on their board that sets off no active formula.
     /// Components are picked by how recently they were unlocked, and one layer holds only a few high-level components.
     /// </summary>
@@ -250,13 +249,13 @@ namespace Bagels.Core
         /// <summary>A reward gives at most this many components.</summary>
         public const int MaxRewardComponents = 5;
         /// <summary>A reward is worth about this share of the order's cost...</summary>
-        public const double RewardShare = 2.0 / 3.0;
+        public const double RewardShare = 1.0;
         /// <summary>...give or take this much of the cost.</summary>
         public const double RewardJitter = 0.05;
         /// <summary>The components aim to be worth about this share of the reward; the tip is the rest...</summary>
-        public const double ComponentShare = 0.5;
+        public const double ComponentShare = 2.0 / 3.0;
         /// <summary>...and are never worth more than this share of it.</summary>
-        public const double MaxComponentShare = 0.6;
+        public const double MaxComponentShare = 0.8;
         /// <summary>Components stop being added once they reach this share of their target.</summary>
         const double CloseEnough = 0.8;
         /// <summary>

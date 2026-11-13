@@ -43,12 +43,13 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - Components with no price (K and L) can never be bought. They can only be crafted.
 - Money only comes from order tips.
 - **Stock**: components given by order rewards are kept in a stock. Each formula's product icon in the side panel shows how many free copies are stocked. Dragging the icon out places a stocked copy for free, and only buys one once the stock runs out. Undoing that placement returns the copy to stock.
-- Stocked components do not count as money, so they do not help unlock formulas.
+- Stocked components do not count as money, so they cannot pay for formulas.
 
 #### Unlocking formulas
 - At the start, the player has only As and knows the formulas for B and C.
-- Formulas unlock in the order of the formula list. The next formula is revealed as soon as the player's current money reaches that component's price. Unlocking a formula also lets the player buy that component.
-- F is a special case: it unlocks at the same time as E.
+- Formulas unlock in the order of the formula list. The next formula is bought: it costs the price of its component, and the player buys it with the button on the greyed-out stand-in in the side panel once they have that much money. Buying a formula also lets the player buy that component.
+- Buying a formula is final: undo never takes the formula back or refunds it.
+- F is a special case: it unlocks at the same time as E, which is bought for E's price alone.
 - A component with no price has its formula revealed once the component before it in the list is created on the board by a formula. Buying that component does not count. K unlocks when a J is first crafted, and L unlocks when K is first crafted.
 
 ### Orders
@@ -59,15 +60,15 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
   - A bread with no listed contents accepts anything, but everything inside it is extra.
   - If the listed contents could be matched in more than one way, the way with the fewest extras counts.
 - To fulfill an order, the player drags matching components from the board to that order's tray. An order can be filled one item at a time, but each item goes in as one unit. In the example, the B and the "C containing an A and a B" can be added separately, but the C goes in together with its contents.
-- An order has at most 5 items.
+- An order has at most 3 items.
 - Orders only ask for bagels and breads that are currently available.
-- **Rewards**: an order's reward is worth about 2/3 of the total cost of its items, give or take 5% of the cost. In the example above, the items cost $25, so the reward is worth about $17. The reward has two parts: components and a tip.
-  - **Components**: worth about half of the reward, which is about 1/3 of the order's cost. They may fall a little short of that, and never exceed 60% of the reward.
+- **Rewards**: an order's reward is worth about the total cost of its items, give or take 5% of the cost. In the example above, the items cost $25, so the reward is worth about $26. The reward has two parts: components and a tip.
+  - **Components**: worth about 2/3 of the reward, which is about 2/3 of the order's cost. They may fall a little short of that, and never exceed 80% of the reward.
     - A reward only gives components that are unlocked and priced. It never gives A, or either of the two most recently unlocked components. Breads are given empty.
     - A reward gives at most 5 components.
     - Rewards favour the most valuable component that still fits, so they shift to higher-value components as the player progresses. Some randomness stays: each cheaper component has half the chance of the one above it.
     - Given components go into the player's stock (see Money and purchasing). They are given even when the order is imperfect.
-  - **Tip**: the rest of the reward's value is paid as money. A perfect order earns the full tip. An imperfect order earns 20% of it with 1 extra topping, 15% with 2, 10% with 3, 5% with 4, and nothing with 5 or more.
+  - **Tip**: the rest of the reward's value is paid as money. A perfect order earns the full tip. An imperfect order earns 60% of it with 1 extra topping, 30% with 2, 10% with 3, 5% with 4, and nothing with 5 or more.
   - In the early game, when no component can be given, the whole reward is the tip.
   - The tip amount is never shown in advance. An order card lists only the components and the word "tip".
 - **Customer response**: when an order is completed, a small text box with the customer's reaction pops up in the top-right corner of the board, next to the orders panel. It fades in quickly, lingers for about 3 seconds, then fades out. The line is picked at random from those written for that many extra toppings, in `Assets/Resources/CustomerResponses.txt`.
@@ -75,6 +76,7 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - The game starts with 1 order, and at most 3 orders are active at a time.
 - When an order is fulfilled, a replacement order is generated right away. If fewer than 3 orders are active after that, one more is added.
 - The orders panel lists orders as a docket, with the final order (once it appears) always at the top. When an order is fulfilled, its card fades away slowly. Then the orders below it slide up smoothly, and the new order fades in at the bottom.
+- An order card draws each item the way it will look on the board: a bread is drawn with its toppings inside its slots. A card shows one layer of toppings. For example, a C with a B and an A shows as a C holding a B and an A. When an item's toppings have toppings of their own, those nested breads are drawn empty, and a small + button next to the item opens a popup with every layer. For example, an H holding an E that holds an A shows on the card as an H holding an empty E, and the popup shows the H holding the E, with the E holding the A on its own row below. In the popup, each bread that has toppings gets its own row, drawn with its direct toppings inside it and indented under its parent's row.
 - For recursion in orders, Cs are limited to one level of recusion (they must directly hold bagels or nothing, not breads), Es can have two levels, and Hs can have three. This counts from the top-most level.
 - Each bread also limits which toppings an order may ask for in it. A bread may still be ordered empty. These limits apply to every bread of that type, at any level of nesting. They only cover what the order asks for, not extra toppings the player adds:
   - A C holds exactly one of these sets as its direct contents: A, B+A, D, D+A, D+B or F. This only counts the C's own toppings.
@@ -95,7 +97,8 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - The UI is built on a Canvas. A side panel shows the unlocked formulas.
 - The formulas are split across multiple pages instead of one scrolling list.
 - Each formula's product icon can be dragged onto the board to buy that component. The panel also has an A icon that spawns a free A to drag onto the board.
-- A greyed-out rectangle stands in for the next component to unlock and shows its unlock condition.
+- A greyed-out rectangle stands in for the next component to unlock. For a formula that is bought, it has a buy button showing the price, dimmed until the player can afford it. For one that unlocks by crafting, it says what to craft.
+- The top-left corner has two small buttons: a menu button (no menu yet) and a "?" help button. The help button opens a popup over the screen with the controls (opening boards, getting free As and buying components, handing items to orders) and the legend for reading a formula. Clicking outside the popup, its close button or Escape closes it.
 - When a formula unlocks, the grey box wipes away to reveal it: the formula fades in and its product pops into place. The panel does not turn the page by itself. If the new formula is on a page the player isn't viewing, that page's arrow button pulses, and the reveal plays when the player turns to it.
 
 #### Board navigation

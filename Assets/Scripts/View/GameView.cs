@@ -202,6 +202,13 @@ namespace Bagels.View
             if (!LoadRules()) { Debug.LogError("GameView has no LevelAsset assigned.", this); return; }
             NewGame();
             if (panel == null) panel = GetComponentInChildren<SidePanel>(true);
+            if (panel != null && panel.IsOutdated)
+            {
+                Debug.LogWarning("Bagels: the side panel saved in the scene is out of date, so it was rebuilt for this " +
+                                 "run. Run Bagels/Rebuild Side Panel and save the scene to update it for good.", panel);
+                foreach (var old in GetComponentsInChildren<SidePanel>(true)) { old.gameObject.SetActive(false); Destroy(old.gameObject); }
+                panel = null;
+            }
             if (panel == null) panel = SidePanel.Create(this);
             if (FindAnyObjectByType<BackgroundMusic>() == null) gameObject.AddComponent<BackgroundMusic>();
             if (Camera != null) FitCamera(SidePanel.ScreenFraction(Camera.aspect), SidePanel.RightScreenFraction(Camera.aspect));
@@ -395,6 +402,16 @@ namespace Bagels.View
         {
             Message = message;
             Changed?.Invoke();
+        }
+
+        /// <summary>Buys the next formula, if the player can afford it (design.md, "Unlocking formulas").</summary>
+        public void BuyNextFormula()
+        {
+            if (session == null || !session.CanBuyNextFormula) return;
+            session.BuyNextFormula();
+            LastResult = null;
+            LastError = null;
+            Say(Unlocked());
         }
 
         /// <summary>

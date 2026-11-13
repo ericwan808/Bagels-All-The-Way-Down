@@ -1,3 +1,4 @@
+using Bagels.Core;
 using Bagels.Data;
 using UnityEngine;
 using UnityEngine.UI;
@@ -126,6 +127,30 @@ namespace Bagels.View
             var letter = Text("Letter", badge.rectTransform, type.Symbol.ToString(), Mathf.RoundToInt(size * 0.26f),
                               ViewColors.TextOn(color), TextAnchor.MiddleCenter, FontStyle.Bold);
             Fill(letter.rectTransform);
+            return root;
+        }
+
+        /// <summary>
+        /// An order item drawn the way it looks on the board: its pastry icon, and for bread its toppings drawn inside
+        /// its slots (in slot order), each again with its own toppings, down to <paramref name="layers"/> layers.
+        /// A bread below the last layer is drawn empty.
+        /// </summary>
+        public static RectTransform ItemIcon(Transform parent, ItemSpec spec, float size, GameView view, int layers)
+        {
+            var type = view.TypeOf(spec.Symbol);
+            var root = PastryIcon(parent, type, size, view);
+            var layout = type != null ? type.ToBoardLayout() : null;
+            if (layout == null || layers <= 0 || spec.Contents.Count == 0) return root;
+
+            var positions = LayoutGeometry.Positions(layout);
+            float scale = size * 0.5f * 0.72f / LayoutGeometry.Bound(layout);
+            float inner = LayoutGeometry.SlotRadius(layout) * scale * 2f;
+            for (int k = 0; k < spec.Contents.Count && k < layout.SlotCount; k++)
+            {
+                var child = ItemIcon(root, spec.Contents[k], inner, view, layers - 1);
+                child.anchoredPosition = positions[k] * scale;
+            }
+            root.Find("Badge")?.SetAsLastSibling(); // keep the bread's letter readable over its toppings
             return root;
         }
     }

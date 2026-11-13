@@ -5,8 +5,8 @@ namespace Bagels.Core
 {
     /// <summary>
     /// Which components are unlocked (see design.md, "Unlocking formulas"). Components unlock in catalog order: a
-    /// priced one as soon as current money reaches its price, an unpriced one once the component before it has been
-    /// crafted by a formula. Unlocks are permanent; undo does not take them back.
+    /// priced one when the player buys its formula (<see cref="Purchase"/>), an unpriced one once the component
+    /// before it has been crafted by a formula. Unlocks are permanent; undo does not take them back.
     /// </summary>
     public sealed class Progression
     {
@@ -39,22 +39,55 @@ namespace Bagels.Core
             return null;
         }
 
-        /// <summary>Unlocks everything whose condition now holds, in order. Returns what was newly unlocked.</summary>
-        public List<PastryInfo> Update(int money)
+        /// <summary>
+        /// What the next formula costs to buy, or null if it isn't bought: it unlocks by crafting instead (K, L), or
+        /// everything is unlocked. The price is the component's own price.
+        /// </summary>
+        public int? NextFormulaPrice => NextLockedIndex() is int i && !catalog[i].UnlocksWithPrevious ? catalog[i].Price : null;
+
+        /// <summary>
+        /// Unlocks the next formula, which must be one that is bought (<see cref="NextFormulaPrice"/>), with any that
+        /// unlock along with it, then anything whose crafting condition already holds. Paying is the caller's job.
+        /// Returns what was newly unlocked.
+        /// </summary>
+        public List<PastryInfo> Purchase()
+        {
+            if (NextFormulaPrice == null) throw new InvalidOperationException("The next formula can't be bought.");
+            var gained = new List<PastryInfo>();
+            UnlockWithFollowers(NextLockedIndex().Value, gained);
+            gained.AddRange(Update());
+            return gained;
+        }
+
+        /// <summary>Unlocks every unpriced component whose crafting condition now holds, in order. Returns what was newly unlocked.</summary>
+        public List<PastryInfo> Update() => Advance(0);
+
+        /// <summary>
+        /// For tests and setup: unlocks in order, as if every formula priced up to <paramref name="budget"/> had been
+        /// bought (without paying), together with any crafting unlocks that hold.
+        /// </summary>
+        public List<PastryInfo> UnlockUpTo(int budget) => Advance(budget);
+
+        List<PastryInfo> Advance(int budget)
         {
             var gained = new List<PastryInfo>();
             while (NextLockedIndex() is int i)
             {
                 var info = catalog[i];
                 bool ready = info.UnlocksWithPrevious && i > 0 && unlocked.Contains(catalog[i - 1].Symbol)
-                             || (info.Price is int price ? money >= price
+                             || (info.Price is int price ? budget >= price
                                                          : i > 0 && crafted.Contains(catalog[i - 1].Symbol));
                 if (!ready) break;
-                Unlock(i, gained);
-                // Followers unlock at the same time (F with E).
-                for (int j = i + 1; j < catalog.Count && catalog[j].UnlocksWithPrevious; j++) Unlock(j, gained);
+                UnlockWithFollowers(i, gained);
             }
             return gained;
+        }
+
+        void UnlockWithFollowers(int i, List<PastryInfo> gained)
+        {
+            Unlock(i, gained);
+            // Followers unlock at the same time (F with E).
+            for (int j = i + 1; j < catalog.Count && catalog[j].UnlocksWithPrevious; j++) Unlock(j, gained);
         }
 
         void Unlock(int i, List<PastryInfo> gained)
