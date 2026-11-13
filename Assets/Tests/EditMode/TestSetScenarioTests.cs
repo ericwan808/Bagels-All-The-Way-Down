@@ -6,7 +6,7 @@ namespace Bagels.Core.Tests
     /// <summary>
     /// The design.md test set (see the formula table there for the notation):
     ///   B = A-A;  C = B-B (K3 triangle board);  D = A1-B-A-1;  E = D&lt;A&gt;D (K2,3 board);  F = B-[C]-B;
-    ///   G = F-B-F;  H = B&gt;G&lt;B (W7 board);  I = F1&gt;G&lt;F-1;  J = A&gt;A&gt;[I].
+    ///   G = F-B-F;  H = B&gt;G&lt;B (W7 board);  I = F1&gt;G&lt;F-1;  J = D&gt;G&gt;[I]&lt;G&lt;D.
     /// Root is W7 (hub 0, rim 1–6 in a cycle). Formulas are checked in reverse product order: J, I, ..., B.
     /// A-only tests play from scratch; the rest place ingredients directly to check each pattern in isolation.
     /// </summary>
@@ -28,8 +28,9 @@ namespace Bagels.Core.Tests
                                        Edge(0, 1, Dn), Edge(1, 2, Up));
         static readonly Formula FI = F("I", Symbol.I, new[] { N(Symbol.F), N(Symbol.G), N(Symbol.F) },
                                        Edge(0, 1, Dn), Edge(1, 2, Up), Edge(0, 2));
-        static readonly Formula FJ = F("J", Symbol.J, new[] { N(Symbol.A), N(Symbol.A), Cat(Symbol.I) },
-                                       Edge(0, 1, Dn), Edge(1, 2, Dn));
+        static readonly Formula FJ = F("J", Symbol.J,
+                                       new[] { N(Symbol.D), N(Symbol.G), Cat(Symbol.I), N(Symbol.G), N(Symbol.D) },
+                                       Edge(0, 1, Dn), Edge(1, 2, Dn), Edge(2, 3, Up), Edge(3, 4, Up));
 
         static readonly Formula[] LevelOrder = { FJ, FI, FH, FG, FF, FE, FD, FC, FB };
 
@@ -274,30 +275,32 @@ namespace Bagels.Core.Tests
         }
 
         /// <summary>
-        /// Root: A at 1 next to the C board at the hub (board X). X: an A at 0 next to the C board at 1 (board Y).
-        /// Y: the catalyst I. So X's A is below the root A, and I is below X's A.
+        /// Root: Ds at 1 and 4, both next to the W7 board X at the hub. X: Gs at 1 and 4, both next to the C board Y
+        /// at X's hub. Y: the catalyst I. Each G is below a D, and I is below both Gs.
         /// </summary>
         Board BuildJ(bool catalystLast)
         {
-            Put(root, 0, Symbol.C);
+            Put(root, 0, Symbol.H);
             var x = root[0].Child;
-            Put(x, 1, Symbol.C);
-            var y = x[1].Child;
-            A(x, 0);
-            if (catalystLast) Put(root, 1, Symbol.A);
-            else Put(y, 0, Symbol.I);
+            Put(x, 0, Symbol.C);
+            var y = x[0].Child;
+            Put(root, 1, Symbol.D);
+            Put(x, 1, Symbol.G);
+            Put(x, 4, Symbol.G);
+            if (!catalystLast) Put(y, 0, Symbol.I);
             return y;
         }
 
         [Test]
-        public void J_CatalystKept_WhenAArrivesLast()
+        public void J_CatalystKept_WhenDArrivesLast()
         {
             var y = BuildJ(catalystLast: false);
-            var result = A(root, 1);
+            var result = Put(root, 4, Symbol.D);
 
             AssertMade(result, FJ);
-            AssertSlot(root, 1, Symbol.J);
-            AssertEmpty(root[0].Child, 0);
+            AssertSlot(root, 4, Symbol.J);
+            AssertEmpty(root, 1);
+            AssertEmpty(root[0].Child, 1, 4);
             AssertSlot(y, 0, Symbol.I);
             Assert.IsTrue(result.TargetReached);
         }
@@ -306,13 +309,26 @@ namespace Bagels.Core.Tests
         public void J_CatalystConsumed_WhenIArrivesLast()
         {
             var y = BuildJ(catalystLast: true);
+            Put(root, 4, Symbol.D);
             var result = Put(y, 0, Symbol.I);
 
             AssertMade(result, FJ);
             AssertSlot(y, 0, Symbol.J);
-            AssertEmpty(root, 1);
-            AssertEmpty(root[0].Child, 0);
+            AssertEmpty(root, 1, 4);
+            AssertEmpty(root[0].Child, 1, 4);
             Assert.IsTrue(result.TargetReached);
+        }
+
+        [Test]
+        public void J_NeedsBothGsAboveTheI()
+        {
+            var y = BuildJ(catalystLast: true);
+            Put(root, 4, Symbol.D);
+            game.Remove(root[0].Child[4]); // drop one G
+            var result = Put(y, 0, Symbol.I);
+
+            AssertMade(result);
+            AssertSlot(y, 0, Symbol.I);
         }
     }
 }

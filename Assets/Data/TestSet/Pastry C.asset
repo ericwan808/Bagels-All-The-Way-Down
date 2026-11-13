@@ -12,8 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8984071b344aa48458b433d4c95095cd, type: 3}
   m_Name: Pastry C
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
-  displayName: C (bread)
+  displayName: Slice of wonderbread
   symbol: 2
   sprite: {fileID: 0}
   color: {r: 0.86, g: 0.68, b: 0.46, a: 1}
   layout: 2
+  purchasable: 1
+  price: 15
+  unlockedAtStart: 1
+  unlocksWithPrevious: 0
+  orderLevels: 1

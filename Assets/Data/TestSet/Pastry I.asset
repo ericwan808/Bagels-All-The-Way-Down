@@ -12,8 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8984071b344aa48458b433d4c95095cd, type: 3}
   m_Name: Pastry I
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
-  displayName: I
+  displayName: Black hole bagel
   symbol: 8
   sprite: {fileID: 0}
-  color: {r: 0.88, g: 0.52, b: 0.62, a: 1}
+  color: {r: 0.3, g: 0.22, b: 0.36, a: 1}
   layout: 0
+  purchasable: 1
+  price: 150
+  unlockedAtStart: 0
+  unlocksWithPrevious: 0
+  orderLevels: 1

@@ -21,7 +21,7 @@ namespace Bagels.Core
     /// Finds formulas involving a trigger element. A match maps each pattern node to a distinct element so that
     /// every pattern edge holds with its kind and direction; extra adjacencies on the board are fine.
     /// Search order is deterministic: formulas in list order, start nodes in index order, candidates in
-    /// board/slot order.
+    /// board/slot order. The per-formula search order is precomputed (<see cref="MatchPlan"/>).
     /// </summary>
     public static class Matcher
     {
@@ -36,14 +36,16 @@ namespace Bagels.Core
         public static bool TryMatch(Element trigger, Formula formula, out Match match)
         {
             var nodes = formula.Nodes;
-            for (int start = 0; start < nodes.Count; start++)
+            Element[] mapping = null;
+            foreach (var plan in formula.Plans)
             {
-                if (nodes[start].Symbol != trigger.Symbol) continue;
-                var search = new Search(formula, start);
-                search.Mapping[start] = trigger;
-                if (search.Extend(1))
+                if (nodes[plan.Start].Symbol != trigger.Symbol) continue;
+                if (mapping == null) mapping = new Element[nodes.Count];
+                else System.Array.Clear(mapping, 0, mapping.Length);
+                mapping[plan.Start] = trigger;
+                if (Extend(formula, plan, mapping, 1))
                 {
-                    match = new Match(formula, trigger, search.Mapping);
+                    match = new Match(formula, trigger, mapping);
                     return true;
                 }
             }
@@ -51,80 +53,34 @@ namespace Bagels.Core
             return false;
         }
 
-        sealed class Search
+        static bool Extend(Formula formula, MatchPlan plan, Element[] mapping, int k)
         {
-            readonly Formula formula;
-            readonly List<int> order = new List<int>();   // nodes in BFS order from the start node
-            readonly int[] anchor;                        // already-ordered node each node is reached from
-            readonly AdjacencyKind[] anchorKind;          // kind of node relative to its anchor
-            public readonly Element[] Mapping;
+            if (k == plan.Order.Length) return true;
+            int node = plan.Order[k];
+            var wanted = formula.Nodes[node].Symbol;
 
-            public Search(Formula formula, int start)
+            foreach (var candidate in Adjacency.Neighbors(mapping[plan.Anchor[node]], plan.AnchorKind[node]))
             {
-                this.formula = formula;
-                int n = formula.Nodes.Count;
-                Mapping = new Element[n];
-                anchor = new int[n];
-                anchorKind = new AdjacencyKind[n];
-
-                var queued = new bool[n];
-                order.Add(start);
-                queued[start] = true;
-                for (int i = 0; i < order.Count; i++)
-                {
-                    int v = order[i];
-                    foreach (var e in formula.Edges)
-                    {
-                        int other;
-                        AdjacencyKind kind;
-                        if (e.A == v) { other = e.B; kind = e.Kind; }
-                        else if (e.B == v) { other = e.A; kind = Adjacency.Inverse(e.Kind); }
-                        else continue;
-                        if (queued[other]) continue;
-                        queued[other] = true;
-                        anchor[other] = v;
-                        anchorKind[other] = kind;
-                        order.Add(other);
-                    }
-                }
+                if (candidate.Symbol != wanted || IsUsed(mapping, candidate)) continue;
+                mapping[node] = candidate;
+                if (EdgesHold(plan.Checks[k], mapping) && Extend(formula, plan, mapping, k + 1)) return true;
+                mapping[node] = null;
             }
+            return false;
+        }
 
-            public bool Extend(int k)
-            {
-                if (k == order.Count) return true;
-                int node = order[k];
-                var wanted = formula.Nodes[node].Symbol;
+        static bool IsUsed(Element[] mapping, Element element)
+        {
+            foreach (var m in mapping)
+                if (m == element) return true;
+            return false;
+        }
 
-                foreach (var candidate in Adjacency.Neighbors(Mapping[anchor[node]], anchorKind[node]))
-                {
-                    if (candidate.Symbol != wanted || IsUsed(candidate)) continue;
-                    Mapping[node] = candidate;
-                    if (EdgesHold(node) && Extend(k + 1)) return true;
-                    Mapping[node] = null;
-                }
-                return false;
-            }
-
-            bool IsUsed(Element element)
-            {
-                foreach (var m in Mapping)
-                    if (m == element) return true;
-                return false;
-            }
-
-            // Every edge between this node and an already-mapped node must exist on the board.
-            bool EdgesHold(int node)
-            {
-                foreach (var e in formula.Edges)
-                {
-                    if (e.A != node && e.B != node) continue;
-                    var a = Mapping[e.A];
-                    var b = Mapping[e.B];
-                    if (a == null || b == null) continue;
-                    if (!Adjacency.AreAdjacent(a, b, e.Kind)) return false;
-                }
-                return true;
-            }
+        static bool EdgesHold(PatternEdge[] checks, Element[] mapping)
+        {
+            foreach (var e in checks)
+                if (!Adjacency.AreAdjacent(mapping[e.A], mapping[e.B], e.Kind)) return false;
+            return true;
         }
     }
 }

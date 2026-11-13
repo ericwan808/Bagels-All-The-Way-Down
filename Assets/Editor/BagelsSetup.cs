@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using Bagels.Core;
 using Bagels.Data;
@@ -71,67 +72,73 @@ public static class BagelsSetup
     static LevelAsset MakeLevel()
     {
         EnsureDir(DataDir);
-        var root = Pastry("Root", "Root Bread", Symbol.R, new Color(0.93f, 0.85f, 0.72f), LayoutKind.W7);
-        var a = Pastry("A", "A", Symbol.A, new Color(1f, 0.93f, 0.72f), LayoutKind.None);
-        var b = Pastry("B", "B", Symbol.B, new Color(0.96f, 0.75f, 0.40f), LayoutKind.None);
-        var c = Pastry("C", "C (bread)", Symbol.C, new Color(0.86f, 0.68f, 0.46f), LayoutKind.K3);
-        var d = Pastry("D", "D", Symbol.D, new Color(0.78f, 0.42f, 0.22f), LayoutKind.None);
-        var e = Pastry("E", "E (bread)", Symbol.E, new Color(0.45f, 0.24f, 0.13f), LayoutKind.K23);
-        var f = Pastry("F", "F", Symbol.F, new Color(0.62f, 0.80f, 0.55f), LayoutKind.None);
-        var g = Pastry("G", "G", Symbol.G, new Color(0.40f, 0.62f, 0.78f), LayoutKind.None);
-        var h = Pastry("H", "H (bread)", Symbol.H, new Color(0.74f, 0.58f, 0.82f), LayoutKind.W7);
-        var i = Pastry("I", "I", Symbol.I, new Color(0.88f, 0.52f, 0.62f), LayoutKind.None);
-        var j = Pastry("J", "J", Symbol.J, new Color(0.95f, 0.78f, 0.20f), LayoutKind.None);
+        // The design.md formula list: name, price (null = craft only) and formula, in product order, which is also
+        // the unlock order. A, B and C are known from the start; F unlocks together with E. In orders, a C may hold
+        // only bagels, an E two levels and an H three.
+        var root = Pastry("Root", "Root Bread", Symbol.R, new Color(0.93f, 0.85f, 0.72f), LayoutKind.W7, null, true);
+        var a = Pastry("A", "Everything bagel", Symbol.A, new Color(1f, 0.93f, 0.72f), LayoutKind.None, 0, true);
+        var b = Pastry("B", "Everything bagel + Cream cheese", Symbol.B, new Color(0.96f, 0.75f, 0.40f), LayoutKind.None, 5, true);
+        var c = Pastry("C", "Slice of wonderbread", Symbol.C, new Color(0.86f, 0.68f, 0.46f), LayoutKind.K3, 15, true, orderLevels: 1);
+        var d = Pastry("D", "Everything everything bagel", Symbol.D, new Color(0.78f, 0.42f, 0.22f), LayoutKind.None, 20);
+        var e = Pastry("E", "Croissant", Symbol.E, new Color(0.45f, 0.24f, 0.13f), LayoutKind.K23, 50, orderLevels: 2);
+        var f = Pastry("F", "Dharma bagel", Symbol.F, new Color(0.62f, 0.80f, 0.55f), LayoutKind.None, 30, false, true);
+        var g = Pastry("G", "Earth bagel", Symbol.G, new Color(0.40f, 0.62f, 0.78f), LayoutKind.None, 75);
+        var h = Pastry("H", "Na'an", Symbol.H, new Color(0.74f, 0.58f, 0.82f), LayoutKind.W7, 100, orderLevels: 3);
+        var i = Pastry("I", "Black hole bagel", Symbol.I, new Color(0.30f, 0.22f, 0.36f), LayoutKind.None, 150);
+        var j = Pastry("J", "Galaxy bagel", Symbol.J, new Color(0.88f, 0.52f, 0.62f), LayoutKind.None, 400);
+        var k = Pastry("K", "Bagel on a turtle on a bagel on a turtle", Symbol.K, new Color(0.45f, 0.70f, 0.45f), LayoutKind.None, null);
+        var l = Pastry("L", "True plain bagel", Symbol.L, new Color(0.98f, 0.84f, 0.25f), LayoutKind.None, null);
 
-        // Each formula mirrors the explicit node/edge form in design.md. There, "x<y" means x sits one level
-        // below y, so y is Up from x; "x>y" means y is Down from x.
-        const AdjacencyKind N = AdjacencyKind.Normal, Up = AdjacencyKind.Up, Dn = AdjacencyKind.Down;
-        var fb = Formula("Formula B", b, new[] { (a, false), (a, false) }, (0, 1, N));                     // A A | 0-1
-        var fc = Formula("Formula C", c, new[] { (b, false), (b, false) }, (0, 1, N));                     // B B | 0-1
-        var fd = Formula("Formula D", d, new[] { (a, false), (b, false), (a, false) },
-                         (0, 1, N), (1, 2, N), (0, 2, N));                                                 // A B A | 0-1 1-2 0-2
-        var fe = Formula("Formula E", e, new[] { (d, false), (a, false), (d, false) },
-                         (0, 1, Up), (1, 2, Dn));                                                          // D A D | 0<1 1>2
-        var ff = Formula("Formula F", f, new[] { (b, false), (c, true), (b, false) },
-                         (0, 1, N), (1, 2, N));                                                            // B [C] B | 0-1 1-2
-        var fg = Formula("Formula G", g, new[] { (f, false), (b, false), (f, false) },
-                         (0, 1, N), (1, 2, N));                                                            // F B F | 0-1 1-2
-        var fh = Formula("Formula H", h, new[] { (b, false), (g, false), (b, false) },
-                         (0, 1, Dn), (1, 2, Up));                                                          // B G B | 0>1 1<2
-        var fi = Formula("Formula I", i, new[] { (f, false), (g, false), (f, false) },
-                         (0, 1, Dn), (1, 2, Up), (0, 2, N));                                               // F G F | 0>1 1<2 0-2
-        var fj = Formula("Formula J", j, new[] { (a, false), (a, false), (i, true) },
-                         (0, 1, Dn), (1, 2, Dn));                                                          // A A [I] | 0>1 1>2
+        var types = new[] { root, a, b, c, d, e, f, g, h, i, j, k, l };
+        PastryType TypeOf(Symbol s) => System.Array.Find(types, t => t.Symbol == s);
 
+        // Condensed notation verbatim from design.md.
+        var table = new (PastryType product, string notation)[]
+        {
+            (b, "A-A"),
+            (c, "B-B"),
+            (d, "A1-B-A-1"),
+            (e, "D<A>D"),
+            (f, "B-[C]-B"),
+            (g, "F-B-F"),
+            (h, "B>G<B"),
+            (i, "F1>G<F-1"),
+            (j, "D>G>[I]<G<D"),
+            (k, "J1-J>F-F<J-J>F-F<1"),
+            (l, "K>J>I(-G>F1(>D>B(-A)(-A))(>D>B(-A)(-A)))(-G>1)"),
+        };
+
+        var formulas = new List<FormulaAsset>();
+        var made = new HashSet<Symbol> { a.Symbol };
+        foreach (var (product, notation) in table)
+        {
+            var asset = Load<FormulaAsset>($"{DataDir}/Formula {product.Symbol}.asset");
+            asset.EditorInit(product, notation, TypeOf);
+            EditorUtility.SetDirty(asset);
+            // design.md: a formula only uses elements that come before its product in the list.
+            foreach (var ingredient in asset.Ingredients)
+                if (!made.Contains(ingredient.type.Symbol))
+                    Debug.LogWarning($"Bagels: {asset.name} ({notation}) uses {ingredient.type.Symbol}, which is not made earlier in the list.", asset);
+            made.Add(product.Symbol);
+            formulas.Add(asset);
+        }
+
+        // Stored in list order; the level checks them bottom-up, so the furthest-down match fires.
         var level = Load<LevelAsset>($"{DataDir}/Test Set.asset");
-        // Checked in reverse product order (see design.md), so later formulas win. E.g. D's final A would otherwise
-        // be taken by A+A->B.
-        level.EditorInit(root, j, a, new[] { fj, fi, fh, fg, ff, fe, fd, fc, fb });
+        level.EditorInit(root, l, a, formulas.ToArray());
         EditorUtility.SetDirty(level);
         return level;
     }
 
-    static PastryType Pastry(string file, string display, Symbol symbol, Color color, LayoutKind layout)
+    static PastryType Pastry(string file, string display, Symbol symbol, Color color, LayoutKind layout,
+                             int? price, bool unlockedAtStart = false, bool unlocksWithPrevious = false,
+                             int orderLevels = 1)
     {
         var p = Load<PastryType>($"{DataDir}/Pastry {file}.asset");
         p.EditorInit(display, symbol, color, layout);
+        p.EditorInitEconomy(price, unlockedAtStart, unlocksWithPrevious, orderLevels);
         EditorUtility.SetDirty(p);
         return p;
-    }
-
-    static FormulaAsset Formula(string file, PastryType product, (PastryType type, bool catalyst)[] ingredients,
-                                params (int from, int to, AdjacencyKind kind)[] links)
-    {
-        var f = Load<FormulaAsset>($"{DataDir}/{file}.asset");
-        var nodes = new FormulaAsset.Ingredient[ingredients.Length];
-        for (int i = 0; i < nodes.Length; i++)
-            nodes[i] = new FormulaAsset.Ingredient { type = ingredients[i].type, catalyst = ingredients[i].catalyst };
-        var edges = new FormulaAsset.Link[links.Length];
-        for (int i = 0; i < edges.Length; i++)
-            edges[i] = new FormulaAsset.Link { from = links[i].from, to = links[i].to, kind = links[i].kind };
-        f.EditorInit(product, nodes, edges);
-        EditorUtility.SetDirty(f);
-        return f;
     }
 
     static T Load<T>(string path) where T : ScriptableObject

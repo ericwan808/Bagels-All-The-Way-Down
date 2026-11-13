@@ -12,8 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8984071b344aa48458b433d4c95095cd, type: 3}
   m_Name: Pastry D
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
-  displayName: D
+  displayName: Everything everything bagel
   symbol: 3
   sprite: {fileID: 0}
   color: {r: 0.78, g: 0.42, b: 0.22, a: 1}
   layout: 0
+  purchasable: 1
+  price: 20
+  unlockedAtStart: 0
+  unlocksWithPrevious: 0
+  orderLevels: 1

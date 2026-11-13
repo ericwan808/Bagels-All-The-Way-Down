@@ -49,14 +49,15 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - A component with no price has its formula revealed once the component before it in the list is created on the board by a formula. Buying that component does not count. K unlocks when a J is first crafted, and L unlocks when K is first crafted.
 
 ### Orders
-- Orders are the only source of money. Each order asks for a specific set of bagels and breads. A bread in an order can require specific contents, including nested breads with their own contents. For example, an order might pay $15 for a B and a C containing an A and a B.
+- Orders are the only source of money. Each order asks for a specific set of bagels and breads. A bread in an order can require specific contents, including nested breads with their own contents. For example, an order might pay $10 for a B and a C containing an A and a B.
 - Matching is strict: a bread must contain exactly the listed contents, with nothing extra.
 - To fulfill an order, the player drags matching components from the board to that order's tray. An order can be filled one item at a time, but each item goes in as one unit. In the example, the B and the "C containing an A and a B" can be added separately, but the C goes in together with its contents.
 - An order has at most 5 items.
 - Orders only ask for bagels and breads that are currently available.
-- The total cost of the items in an order must not be more than twice the order's reward. In the example above, the items cost $25 and the order pays $15.
+- The order's reward is at most half of the total cost of the items in an order. In the example above, the items cost $25 and the order pays $10.
 - The game starts with 1 order, and at most 3 orders are active at a time.
 - When an order is fulfilled, a replacement order is generated right away. If fewer than 3 orders are active after that, one more is added.
+- For recursion in orders, Cs are limited to one level of recusion (they must directly hold bagels or nothing, not breads), Es can have two levels, and Hs can have three. This counts from the top-most level.
 
 ### Winning
 - The final target bagel (L) can be crafted anywhere on the board.

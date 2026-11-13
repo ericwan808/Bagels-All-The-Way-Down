@@ -13,12 +13,16 @@ MonoBehaviour:
   m_Name: Formula J
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.FormulaAsset
   ingredients:
-  - type: {fileID: 11400000, guid: 80f9d894f0d69a346b34943e46dad881, type: 2}
+  - type: {fileID: 11400000, guid: ce7cf35793ef2e940a867bc673bb58ee, type: 2}
     catalyst: 0
-  - type: {fileID: 11400000, guid: 80f9d894f0d69a346b34943e46dad881, type: 2}
+  - type: {fileID: 11400000, guid: 7410198f3b9e753468c03c3ad51f945d, type: 2}
     catalyst: 0
   - type: {fileID: 11400000, guid: 4f559bf5ba654fb428eb1ee354ec47cb, type: 2}
     catalyst: 1
+  - type: {fileID: 11400000, guid: 7410198f3b9e753468c03c3ad51f945d, type: 2}
+    catalyst: 0
+  - type: {fileID: 11400000, guid: ce7cf35793ef2e940a867bc673bb58ee, type: 2}
+    catalyst: 0
   links:
   - from: 0
     to: 1
@@ -26,4 +30,10 @@ MonoBehaviour:
   - from: 1
     to: 2
     kind: 1
+  - from: 2
+    to: 3
+    kind: 2
+  - from: 3
+    to: 4
+    kind: 2
   product: {fileID: 11400000, guid: 54e4e09522dad464fb35936fbb844028, type: 2}

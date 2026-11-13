@@ -29,10 +29,13 @@ namespace Bagels.View.Tests
             var a = Pastry("A", Symbol.A, LayoutKind.None);
             var c = Pastry("C", Symbol.C, LayoutKind.K3);
             var e = Pastry("E", Symbol.E, LayoutKind.None);
+            a.EditorInitEconomy(0, unlockedAtStart: true);
+            c.EditorInitEconomy(5, unlockedAtStart: true);
+            e.EditorInitEconomy(10, unlockedAtStart: true);
             var fe = Formula(e, c, c);
             var fc = Formula(c, a, a);
             var level = ScriptableObject.CreateInstance<LevelAsset>();
-            level.EditorInit(r, e, a, new[] { fe, fc });
+            level.EditorInit(r, e, a, new[] { fc, fe }); // list order; the last formula wins ties
             owned = new Object[] { r, a, c, e, fe, fc, level };
 
             view = new GameObject("Test Game").AddComponent<GameView>();

@@ -12,8 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8984071b344aa48458b433d4c95095cd, type: 3}
   m_Name: Pastry F
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
-  displayName: F
+  displayName: Dharma bagel
   symbol: 5
   sprite: {fileID: 0}
   color: {r: 0.62, g: 0.8, b: 0.55, a: 1}
   layout: 0
+  purchasable: 1
+  price: 30
+  unlockedAtStart: 0
+  unlocksWithPrevious: 1
+  orderLevels: 1

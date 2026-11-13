@@ -34,6 +34,11 @@ namespace Bagels.Data
         public Link[] Links => links;
         public PastryType Product => product;
 
+        /// <summary>This formula's pattern in the explicit text form (design.md), e.g. <c>A B A | 0-1 1-2 0-2</c>.</summary>
+        public string Notation => FormulaNotation.ToExplicit(
+            ingredients.Select(i => new PatternNode(i.type != null ? i.type.Symbol : default, i.catalyst)),
+            links.Select(l => new PatternEdge(l.from, l.to, l.kind)));
+
         public Formula ToFormula()
         {
             if (product == null) throw new InvalidOperationException($"Formula '{name}' has no product.");
@@ -52,6 +57,23 @@ namespace Bagels.Data
             this.product = product;
             this.ingredients = ingredients;
             this.links = links;
+        }
+
+        /// <summary>
+        /// Sets the ingredients and links from a notation string in either form (see <see cref="FormulaNotation"/>).
+        /// <paramref name="typeOf"/> resolves each symbol to its pastry type.
+        /// </summary>
+        public void EditorInit(PastryType product, string notation, Func<Symbol, PastryType> typeOf)
+        {
+            var pattern = FormulaNotation.Parse(notation);
+            var nodes = pattern.Nodes.Select(n => new Ingredient
+            {
+                type = typeOf(n.Symbol) ?? throw new InvalidOperationException(
+                    $"Formula '{name}': no pastry type with symbol {n.Symbol}."),
+                catalyst = n.IsCatalyst,
+            }).ToArray();
+            var edges = pattern.Edges.Select(e => new Link { from = e.A, to = e.B, kind = e.Kind }).ToArray();
+            EditorInit(product, nodes, edges);
         }
 #endif
     }

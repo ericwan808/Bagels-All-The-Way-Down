@@ -6,7 +6,10 @@ using UnityEngine;
 
 namespace Bagels.Data
 {
-    /// <summary>Authoring data for a level. Formulas are checked in list order, so put more specific ones first.</summary>
+    /// <summary>
+    /// Authoring data for a level. Formulas are listed in product order, which is also the unlock order; when several
+    /// match, the one furthest down the list fires (design.md, "Formula list").
+    /// </summary>
     [CreateAssetMenu(menuName = "Bagels/Level", fileName = "Level")]
     public sealed class LevelAsset : ScriptableObject
     {
@@ -19,7 +22,17 @@ namespace Bagels.Data
         public PastryType Root => root;
         public PastryType Target => target;
         public PastryType Basic => basic;
+        /// <summary>In product (unlock) order.</summary>
         public IReadOnlyList<FormulaAsset> Formulas => formulas;
+
+        /// <summary>The basic element, then every formula's product in list order: the unlock order.</summary>
+        public IEnumerable<PastryType> Catalog()
+        {
+            var seen = new HashSet<PastryType>();
+            if (basic != null && seen.Add(basic)) yield return basic;
+            foreach (var f in formulas)
+                if (f != null && f.Product != null && seen.Add(f.Product)) yield return f.Product;
+        }
 
         /// <summary>Every pastry type referenced by this level, without duplicates.</summary>
         public IEnumerable<PastryType> PastryTypes()
@@ -49,10 +62,12 @@ namespace Bagels.Data
                 if (layout != null) layouts[t.Symbol] = layout;
             }
 
+            // The furthest-down formula wins, so the matcher checks the list bottom-up.
             return new Rules(root.Symbol,
-                formulas.Where(f => f != null).Select(f => f.ToFormula()),
+                formulas.Where(f => f != null).Reverse().Select(f => f.ToFormula()),
                 layouts,
-                target != null ? target.Symbol : (Symbol?)null);
+                target != null ? target.Symbol : (Symbol?)null,
+                Catalog().Select(t => t.ToInfo()));
         }
 
 #if UNITY_EDITOR

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Bagels.Core;
 using Bagels.Data;
@@ -43,6 +44,14 @@ namespace Bagels.View
             public Color RingColor;
         }
 
+        /// <summary>A drawn element the player can drag to an order tray.</summary>
+        sealed class ElementTarget
+        {
+            public Element Element;
+            public Vector2 Center;
+            public float Radius;
+        }
+
         /// <summary>A bread on the focus board that can be zoomed into.</summary>
         sealed class BreadTarget
         {
@@ -71,6 +80,8 @@ namespace Bagels.View
         [Header("Input")]
         [Tooltip("Most seconds between the two clicks of a double click that places an A in an empty slot.")]
         [SerializeField] float doubleClickTime = 0.35f;
+        [Tooltip("Pixels the pointer must move while pressed on an element before it is picked up for an order.")]
+        [SerializeField] float dragThreshold = 8f;
         [Tooltip("Side panel saved in the scene. If missing, one is built at runtime.")]
         [SerializeField] SidePanel panel;
 
@@ -80,6 +91,12 @@ namespace Bagels.View
         const int HoverOrder = 9;
         const int BadgeOrder = 500;
         const int GhostOrder = 1000;
+        /// <summary>
+        /// Sorting order of the side panels' canvas: above every board sprite (badges top out just past
+        /// <see cref="BadgeOrder"/>), so boards slide under the panels while zooming, but below
+        /// <see cref="GhostOrder"/>, so anything being dragged shows over the panels.
+        /// </summary>
+        public const int PanelOrder = 900;
         const int BackFrameOffset = -2000;
         /// <summary>Levels below the focus that are drawn open. Bread deeper than this is drawn closed.</summary>
         const int OpenDepth = 1;
@@ -89,8 +106,9 @@ namespace Bagels.View
         readonly Dictionary<Symbol, PastryType> types = new Dictionary<Symbol, PastryType>();
         readonly List<SlotTarget> targets = new List<SlotTarget>();
         readonly List<BreadTarget> breads = new List<BreadTarget>();
-        readonly PlacementHistory history = new PlacementHistory();
+        readonly List<ElementTarget> elements = new List<ElementTarget>();
         Rules rules;
+        GameSession session;
         Transform boardRoot;
         SlotTarget hovered;
         BreadTarget hoveredBread;
@@ -98,6 +116,12 @@ namespace Bagels.View
         float rootSlotRadius = 0.5f;
         Camera cam;
         Coroutine transition;
+        PastryView carried; // a component picked up by clicking a spawner, following the pointer until dropped
+        Symbol carriedSymbol;
+        // Dragging an element from the board towards an order tray.
+        Element pressedElement;
+        Vector2 pressScreen;
+        PastryView dragged;
         float scrollReadyTime;
         bool pointerWasDown;
         // The empty slot hit by the last click, to recognise a double click. Targets are rebuilt on every redraw,
@@ -113,9 +137,14 @@ namespace Bagels.View
         Element drawSkip;
 
         public LevelAsset Level => level;
-        public GameState State { get; private set; }
+        public Rules Rules => rules;
+        public GameSession Session => session;
+        public GameState State => session?.State;
         public PlacementResult LastResult { get; private set; }
         public string LastError { get; private set; }
+
+        /// <summary>A short note about the last action (an unlock, a sale, a refusal), for the status line.</summary>
+        public string Message { get; private set; }
         public Sprite CircleSprite => circleSprite;
         public Sprite RingSprite => ringSprite;
         public Sprite TriangleSprite => triangleSprite;
@@ -128,8 +157,14 @@ namespace Bagels.View
         /// <summary>True while a zoom animation plays. Placement is disabled meanwhile.</summary>
         public bool IsZooming => transition != null;
 
+        /// <summary>True while a component picked up from the side panel follows the pointer.</summary>
+        public bool IsCarrying => carried != null;
+
+        /// <summary>True while an element is being dragged from the board towards an order.</summary>
+        public bool IsDraggingElement => dragged != null;
+
         /// <summary>True if there is a placement to undo.</summary>
-        public bool CanUndo => history.Count > 0;
+        public bool CanUndo => session != null && session.CanUndo;
 
         /// <summary>Raised after every placement, reset or change of the current board.</summary>
         public event Action Changed;
@@ -146,7 +181,7 @@ namespace Bagels.View
 
         void LateUpdate()
         {
-            if (Camera != null) FitCamera(SidePanel.ScreenFraction(Camera.aspect));
+            if (Camera != null) FitCamera(SidePanel.ScreenFraction(Camera.aspect), SidePanel.RightScreenFraction(Camera.aspect));
         }
 
         /// <summary>Builds rules and the board, and uses the scene's side panel (building one if there is none).</summary>
@@ -156,7 +191,7 @@ namespace Bagels.View
             NewGame();
             if (panel == null) panel = GetComponentInChildren<SidePanel>(true);
             if (panel == null) panel = SidePanel.Create(this);
-            if (Camera != null) FitCamera(SidePanel.ScreenFraction(Camera.aspect));
+            if (Camera != null) FitCamera(SidePanel.ScreenFraction(Camera.aspect), SidePanel.RightScreenFraction(Camera.aspect));
         }
 
         bool LoadRules()
@@ -171,11 +206,14 @@ namespace Bagels.View
         public void NewGame()
         {
             StopZoom();
-            history.Clear();
-            State = new GameState(rules);
+            CancelCarry();
+            CancelElementDrag();
+            // Play gets fresh orders every time; the edit-mode preview stays the same between redraws.
+            session = new GameSession(rules, Application.isPlaying ? Environment.TickCount : 0);
             focus = State.Root;
             LastResult = null;
             LastError = null;
+            Message = null;
             Redraw();
             Changed?.Invoke();
         }
@@ -206,24 +244,30 @@ namespace Bagels.View
             if (hovered != null && hovered.Ring != null) hovered.Ring.color = highlightColor;
         }
 
-        /// <summary>Places an A in the slot under <paramref name="world"/>. Returns false if there is none.</summary>
-        public bool TryPlaceAt(Vector2 world)
+        /// <summary>Places (or buys) <paramref name="symbol"/> in the slot under <paramref name="world"/>. Returns false if there is none.</summary>
+        public bool TryPlaceAt(Vector2 world, Symbol symbol = GameSession.Basic)
         {
             var target = FindTarget(world);
             SetHover(null);
             if (target == null) return false;
-            Place(target.Board, target.Slot);
+            Place(target.Board, target.Slot, symbol);
             return true;
         }
 
-        public void Place(Board board, int slot)
+        public void Place(Board board, int slot) => Place(board, slot, GameSession.Basic);
+
+        /// <summary>Places a free A, or buys and places another component.</summary>
+        public void Place(Board board, int slot, Symbol symbol)
         {
-            if (IsZooming) return;
-            if (board == null || !board.IsAlive || slot < 0 || slot >= board.SlotCount || !board.IsEmpty(slot)) return;
-            history.Record(board, slot);
+            if (IsZooming || session == null || session.Won || !GameState.CanPlace(board, slot)) return;
+            if (BuyRefusal(symbol) is string refusal)
+            {
+                Say(refusal);
+                return;
+            }
             try
             {
-                LastResult = State.PlaceA(board, slot);
+                LastResult = session.Place(board, slot, symbol);
                 LastError = null;
             }
             catch (CascadeLimitException e)
@@ -232,7 +276,67 @@ namespace Bagels.View
                 LastError = e.Message;
                 Debug.LogError(e.Message, this);
             }
+            Message = Unlocked();
             Redraw(); // also moves the focus up if a cascade consumed the current board
+            Changed?.Invoke();
+        }
+
+        /// <summary>Why <paramref name="symbol"/> can't be placed right now, or null if it can.</summary>
+        public string BuyRefusal(Symbol symbol)
+        {
+            if (session == null) return "The game hasn't started.";
+            if (session.Won) return "The game is won.";
+            if (symbol == GameSession.Basic || session.CanBuy(symbol)) return null;
+            var info = rules.InfoOf(symbol);
+            if (info == null || info.Price == null) return $"{symbol} can only be crafted.";
+            if (!session.Progress.IsUnlocked(symbol)) return $"{symbol} is not unlocked yet.";
+            return $"{info.Name} costs ${info.Price}; you have ${session.Money}.";
+        }
+
+        /// <summary>
+        /// Hands <paramref name="element"/> to <paramref name="order"/>. Returns what happened; a rejected element
+        /// stays on the board.
+        /// </summary>
+        public DeliveryOutcome Deliver(Order order, Element element)
+        {
+            if (session == null || IsZooming) return DeliveryOutcome.Rejected;
+            var outcome = session.Deliver(order, element);
+            switch (outcome)
+            {
+                case DeliveryOutcome.Rejected:
+                    Say($"Order #{order?.Id} doesn't need that {Describe(element)}.");
+                    return outcome;
+                case DeliveryOutcome.Accepted:
+                    Message = $"Handed in {Describe(element)}.";
+                    break;
+                case DeliveryOutcome.Completed:
+                    Message = $"Order #{order.Id} complete: +${order.Reward}." + Prefix(" ", Unlocked());
+                    break;
+                case DeliveryOutcome.Won:
+                    Message = null;
+                    break;
+            }
+            LastResult = null;
+            LastError = null;
+            Redraw();
+            Changed?.Invoke();
+            return outcome;
+        }
+
+        string Describe(Element element) =>
+            element == null ? "item" : TypeOf(element.Symbol)?.DisplayName ?? element.Symbol.ToString();
+
+        string Unlocked()
+        {
+            if (session == null || session.LastUnlocked.Count == 0) return null;
+            return "Unlocked " + string.Join(" and ", session.LastUnlocked.Select(i => $"{i.Symbol} ({i.Name})")) + "!";
+        }
+
+        static string Prefix(string prefix, string text) => string.IsNullOrEmpty(text) ? "" : prefix + text;
+
+        void Say(string message)
+        {
+            Message = message;
             Changed?.Invoke();
         }
 
@@ -244,8 +348,10 @@ namespace Bagels.View
         {
             if (!CanUndo) return;
             StopZoom();
-            var focusPath = PlacementHistory.PathOf(focus);
-            State = history.UndoLast(rules);
+            CancelCarry();
+            CancelElementDrag();
+            var focusPath = TreePath.Of(focus);
+            session.Undo();
             focus = State.Root;
             // Walk down the old focus path as far as it still leads to bread.
             foreach (int slot in focusPath)
@@ -256,21 +362,57 @@ namespace Bagels.View
             }
             LastResult = null;
             LastError = null;
+            Message = null;
             Redraw();
             Changed?.Invoke();
         }
 
-        /// <summary>A translucent A that follows the pointer while dragging.</summary>
-        public PastryView CreateGhost()
+        /// <summary>A translucent component that follows the pointer while dragging.</summary>
+        public PastryView CreateGhost(Symbol symbol = GameSession.Basic)
         {
             var ghost = Instantiate(pastryPrefab, transform);
             ghost.name = "Drag Ghost";
-            ghost.Bind(level.Basic, rootSlotRadius * 0.86f, GhostOrder);
+            ghost.Bind(TypeOf(symbol), rootSlotRadius * 0.86f, GhostOrder);
             ghost.SetAlpha(0.85f);
             return ghost;
         }
 
         public float GhostRadius(SlotTarget target) => (target != null ? target.Radius : rootSlotRadius) * 0.86f;
+
+        /// <summary>
+        /// Moves a ghost A to the pointer and highlights the slot it would drop into. The ghost snaps into that slot,
+        /// so tiny nested slots are easy to read.
+        /// </summary>
+        public void FollowPointer(PastryView ghost, Vector2 screen)
+        {
+            if (ghost == null || Camera == null) return;
+            var world = ScreenToWorld(screen);
+            var target = FindTarget(world);
+            SetHover(target);
+            ghost.transform.position = target != null ? (Vector3)target.Center : (Vector3)world;
+            ghost.transform.localScale = Vector3.one * GhostRadius(target) * 2f;
+        }
+
+        /// <summary>
+        /// Picks up a component from the side panel (clicking a spawner). It follows the pointer; the next click on an
+        /// empty slot places (or buys) it there, and a click anywhere else, a right click or Escape puts it back.
+        /// </summary>
+        public void BeginCarry(Symbol symbol = GameSession.Basic)
+        {
+            if (!Application.isPlaying || carried != null) return;
+            if (BuyRefusal(symbol) is string refusal) { Say(refusal); return; }
+            carriedSymbol = symbol;
+            carried = CreateGhost(symbol);
+            var mouse = Mouse.current;
+            if (mouse != null) FollowPointer(carried, mouse.position.ReadValue());
+        }
+
+        public void CancelCarry()
+        {
+            if (carried != null) DestroySafe(carried.gameObject);
+            carried = null;
+            SetHover(null);
+        }
 
         /// <summary>The path from the root to the current board, e.g. "Root Bread › C".</summary>
         public string FocusPath()
@@ -288,17 +430,18 @@ namespace Bagels.View
             return sb.ToString();
         }
 
-        /// <summary>Fits the root board into the part of the screen not covered by the side panel.</summary>
-        public void FitCamera(float panelFraction)
+        /// <summary>Fits the root board into the part of the screen between the side panels.</summary>
+        public void FitCamera(float leftFraction, float rightFraction)
         {
             var c = Camera;
             if (c == null) return;
             float aspect = c.aspect;
             float half = rootRadius * 1.08f;
-            float usable = Mathf.Max(0.2f, 1f - panelFraction);
+            float usable = Mathf.Max(0.2f, 1f - leftFraction - rightFraction);
             float size = Mathf.Max(half, half / (usable * aspect));
             var p = transform.position;
-            var position = new Vector3(p.x - size * aspect * panelFraction, p.y, c.transform.position.z);
+            // Centre the board in the gap: the camera sits (right - left) half-widths off the board.
+            var position = new Vector3(p.x + size * aspect * (rightFraction - leftFraction), p.y, c.transform.position.z);
             // Only write on a real change, so the edit-mode preview doesn't keep marking the scene as modified.
             if (!Mathf.Approximately(c.orthographicSize, size)) c.orthographicSize = size;
             if ((c.transform.position - position).sqrMagnitude > 1e-8f) c.transform.position = position;
@@ -316,13 +459,43 @@ namespace Bagels.View
             bool down = mouse.leftButton.isPressed;
             bool pressed = down && !pointerWasDown;
             pointerWasDown = down;
+            var screen = mouse.position.ReadValue();
+
+            var kb = Keyboard.current;
+            bool cancel = mouse.rightButton.wasPressedThisFrame || (kb != null && kb.escapeKey.wasPressedThisFrame);
+            if (carried != null)
+            {
+                if (cancel) CancelCarry();
+                else FollowPointer(carried, screen);
+            }
+            if (pressedElement != null && HandleElementDrag(screen, down, cancel)) return;
             if (IsZooming) return;
 
             var es = EventSystem.current;
             bool overUi = es != null && es.IsPointerOverGameObject();
-            var world = ScreenToWorld(mouse.position.ReadValue());
+            var world = ScreenToWorld(screen);
             SetBreadHover(overUi ? null : FindBread(world));
-            if (pressed && !overUi) HandleClick(world);
+            if (pressed && !overUi)
+            {
+                if (carried != null)
+                {
+                    var target = FindTarget(world);
+                    var symbol = carriedSymbol;
+                    CancelCarry();
+                    if (target != null) Place(target.Board, target.Slot, symbol);
+                }
+                else
+                {
+                    HandleClick(world);
+                    // Pressing on an element may start dragging it to an order once the pointer moves.
+                    var hit = FindElement(world);
+                    if (hit != null && session != null && !session.Won)
+                    {
+                        pressedElement = hit.Element;
+                        pressScreen = screen;
+                    }
+                }
+            }
 
             float scroll = mouse.scroll.ReadValue().y;
             if (overUi || Mathf.Abs(scroll) < 0.01f || Time.unscaledTime < scrollReadyTime) return;
@@ -346,6 +519,57 @@ namespace Bagels.View
             lastClickBoard = target?.Board;
             lastClickSlot = target != null ? target.Slot : -1;
             lastClickTime = now;
+        }
+
+        /// <summary>
+        /// Moves a dragged element with the pointer and hands it to the order under the pointer on release. Returns
+        /// true while the drag owns the pointer.
+        /// </summary>
+        bool HandleElementDrag(Vector2 screen, bool down, bool cancel)
+        {
+            if (cancel || IsZooming || session == null || !State.IsInPlay(pressedElement))
+            {
+                CancelElementDrag();
+                return false;
+            }
+            if (dragged == null)
+            {
+                if (!down) { pressedElement = null; return false; } // a plain click
+                if ((screen - pressScreen).magnitude < dragThreshold) return false;
+                dragged = CreateGhost(pressedElement.Symbol);
+                dragged.name = "Delivery Ghost";
+                SetBreadHover(null);
+            }
+
+            var order = panel != null ? panel.OrderAt(screen) : null;
+            if (down)
+            {
+                dragged.transform.position = (Vector3)ScreenToWorld(screen);
+                if (panel != null) panel.HighlightOrder(order, order != null && order.FindItemFor(pressedElement) >= 0);
+                return true;
+            }
+
+            var element = pressedElement;
+            CancelElementDrag();
+            if (order != null) Deliver(order, element);
+            return true;
+        }
+
+        void CancelElementDrag()
+        {
+            if (dragged != null) DestroySafe(dragged.gameObject);
+            dragged = null;
+            pressedElement = null;
+            if (panel != null) panel.HighlightOrder(null, false);
+        }
+
+        /// <summary>The smallest drawn element under a world point, so the innermost one wins.</summary>
+        ElementTarget FindElement(Vector2 world)
+        {
+            ElementTarget best = null;
+            foreach (var t in elements)
+                if (Vector2.Distance(world, t.Center) <= t.Radius && (best == null || t.Radius < best.Radius)) best = t;
+            return best;
         }
 
         BreadTarget FindBread(Vector2 world)
@@ -394,6 +618,7 @@ namespace Bagels.View
             ClearBoard();
             targets.Clear();
             breads.Clear();
+            elements.Clear();
 
             ChildPlacement(parent, child, out var childCenter, out var childRadius);
             var center = (Vector2)transform.position;
@@ -486,6 +711,7 @@ namespace Bagels.View
             ClearBoard();
             targets.Clear();
             breads.Clear();
+            elements.Clear();
             hovered = null;
             hoveredBread = null;
             focus = VisibleFocus();
@@ -501,16 +727,7 @@ namespace Bagels.View
             return e ?? State.Root;
         }
 
-        bool OnBoard(Element e)
-        {
-            for (; e != null; e = e.Location.Owner)
-            {
-                if (!e.IsAlive) return false;
-                if (e.Location == null) return e == State.Root;
-                if (e.Location[e.SlotIndex] != e) return false;
-            }
-            return false;
-        }
+        bool OnBoard(Element e) => State.IsInPlay(e);
 
         Transform DrawFrame(Element focusBread, Element skip, int orderOffset, bool interactive)
         {
@@ -562,16 +779,21 @@ namespace Bagels.View
                         targets.Add(new SlotTarget { Board = board, Slot = i, Center = p, Radius = slotRadius, Ring = ring, RingColor = ink });
                 }
                 else if (element == drawSkip) { }
-                else if (element.IsBread && depth + 1 <= OpenDepth)
-                {
-                    DrawBread(element, p, slotRadius * 0.9f, depth + 1);
-                    if (depth == 0 && drawInteractive) AddBreadTarget(element, p, slotRadius * 0.9f, depth + 1);
-                }
-                else if (element.IsBread)
-                    DrawClosedBread(element, p, slotRadius * 0.9f, depth + 1);
                 else
-                    SpawnPastry(TypeOf(element.Symbol), p, slotRadius * 0.86f, band + 3, showLabel: true,
-                                name: $"{element.Symbol} @ {i}");
+                {
+                    if (element.IsBread && depth + 1 <= OpenDepth)
+                    {
+                        DrawBread(element, p, slotRadius * 0.9f, depth + 1);
+                        if (depth == 0 && drawInteractive) AddBreadTarget(element, p, slotRadius * 0.9f, depth + 1);
+                    }
+                    else if (element.IsBread)
+                        DrawClosedBread(element, p, slotRadius * 0.9f, depth + 1);
+                    else
+                        SpawnPastry(TypeOf(element.Symbol), p, slotRadius * 0.86f, band + 3, showLabel: true,
+                                    name: $"{element.Symbol} @ {i}");
+                    if (drawInteractive)
+                        elements.Add(new ElementTarget { Element = element, Center = p, Radius = slotRadius * 0.9f });
+                }
             }
 
             if (depth > 0) DrawBadge(bread, type, center, radius, depth);
@@ -709,11 +931,14 @@ namespace Bagels.View
             }
             try
             {
-                State = new GameState(rules);
+                session = new GameSession(rules, 0);
                 focus = State.Root;
                 LastResult = null;
                 LastError = null;
+                Message = null;
                 Redraw();
+                var sidePanel = panel != null ? panel : GetComponentInChildren<SidePanel>(true);
+                if (sidePanel != null) sidePanel.RefreshPreview();
             }
             catch (Exception e)
             {

@@ -12,8 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8984071b344aa48458b433d4c95095cd, type: 3}
   m_Name: Pastry H
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
-  displayName: H (bread)
+  displayName: Na'an
   symbol: 7
   sprite: {fileID: 0}
   color: {r: 0.74, g: 0.58, b: 0.82, a: 1}
   layout: 3
+  purchasable: 1
+  price: 100
+  unlockedAtStart: 0
+  unlocksWithPrevious: 0
+  orderLevels: 3

@@ -17,3 +17,8 @@ MonoBehaviour:
   sprite: {fileID: 0}
   color: {r: 0.93, g: 0.85, b: 0.72, a: 1}
   layout: 3
+  purchasable: 0
+  price: 0
+  unlockedAtStart: 1
+  unlocksWithPrevious: 0
+  orderLevels: 1

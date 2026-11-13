@@ -18,9 +18,12 @@ namespace Bagels.View
             var nodes = formula.Ingredients;
             var links = formula.Links;
             var pos = Positions(nodes.Length, links, box.rect.size, iconSize);
+            iconSize = FitToBox(pos, box.rect.size, iconSize);
 
             var lineColor = ViewColors.Paper;
             float trim = iconSize * 0.5f + 3f;
+            float line = Mathf.Clamp(iconSize * 0.1f, 2f, 4f);
+            float head = Mathf.Clamp(iconSize * 0.42f, 8f, 16f);
             foreach (var l in links)
             {
                 // Arrows always point from the upper ingredient to the lower one.
@@ -30,9 +33,9 @@ namespace Bagels.View
                 var b = pos[lower];
                 var dir = (b - a).normalized;
                 if (l.kind == AdjacencyKind.Normal)
-                    UiFactory.Line(box, a + dir * trim, b - dir * trim, 4f, lineColor);
+                    UiFactory.Line(box, a + dir * trim, b - dir * trim, line, lineColor);
                 else
-                    UiFactory.Arrow(box, a + dir * trim, b - dir * trim, 4f, 16f, view.TriangleSprite, lineColor);
+                    UiFactory.Arrow(box, a + dir * trim, b - dir * trim, line, head, view.TriangleSprite, lineColor);
             }
 
             for (int i = 0; i < nodes.Length; i++)
@@ -40,12 +43,29 @@ namespace Bagels.View
                 if (nodes[i].catalyst)
                 {
                     var ring = UiFactory.Image("Catalyst", box, view.RingSprite, view.CatalystColor,
-                                               Vector2.one * (iconSize + 14f));
+                                               Vector2.one * iconSize * 1.37f);
                     ring.rectTransform.anchoredPosition = pos[i];
                 }
                 var icon = UiFactory.PastryIcon(box, nodes[i].type, iconSize, view);
                 icon.anchoredPosition = pos[i];
             }
+        }
+
+        /// <summary>
+        /// Shrinks the layout (positions and icons together) until it fits the box, centring it. Big formulas such as
+        /// K and L would otherwise spill out of their row. Returns the new icon size.
+        /// </summary>
+        static float FitToBox(Vector2[] pos, Vector2 box, float iconSize)
+        {
+            if (pos.Length == 0) return iconSize;
+            var min = pos[0];
+            var max = pos[0];
+            foreach (var p in pos) { min = Vector2.Min(min, p); max = Vector2.Max(max, p); }
+            var span = max - min + Vector2.one * iconSize;
+            float scale = Mathf.Min(1f, box.x / Mathf.Max(1f, span.x), box.y / Mathf.Max(1f, span.y));
+            var center = (min + max) * 0.5f;
+            for (int i = 0; i < pos.Length; i++) pos[i] = (pos[i] - center) * scale;
+            return iconSize * scale;
         }
 
         /// <summary>How many rows (vertical levels) the formula's diagram uses.</summary>
@@ -64,7 +84,8 @@ namespace Bagels.View
             var level = Levels(count, links);
             int levels = count > 0 ? level.Max() + 1 : 1;
 
-            float rowGap = levels > 1 ? Mathf.Min(iconSize * 1.5f, (box.y - iconSize) / (levels - 1)) : 0f;
+            // Full spacing even when it overflows: FitToBox then shrinks everything evenly, so arrows stay visible.
+            float rowGap = levels > 1 ? iconSize * 1.5f : 0f;
             // Wider columns when there are rows, so diagonal arrows have room for a visible shaft.
             float colGap = iconSize * (levels > 1 ? 2.8f : 1.9f);
             var pos = new Vector2[count];

@@ -12,8 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8984071b344aa48458b433d4c95095cd, type: 3}
   m_Name: Pastry E
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
-  displayName: E (bread)
+  displayName: Croissant
   symbol: 4
   sprite: {fileID: 0}
   color: {r: 0.45, g: 0.24, b: 0.13, a: 1}
   layout: 4
+  purchasable: 1
+  price: 50
+  unlockedAtStart: 0
+  unlocksWithPrevious: 0
+  orderLevels: 2
