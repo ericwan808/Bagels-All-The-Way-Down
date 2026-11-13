@@ -1,0 +1,40 @@
+# What customers say when their order is completed, by how many extra toppings it had.
+#
+# A header like [0] starts the lines for orders with that many extra toppings. Its lines also cover every count
+# up to the next header, so [5+] covers five or more extras (the tip is gone at five). Write one line per row;
+# a customer picks one at random. Blank lines and lines starting with # are ignored.
+
+[0]
+C’est divin.
+Exactly what I ordered!
+Perfect!
+Keep the change!
+Grazie.
+
+[1]
+Hm, thanks.
+Not quite what I asked for.
+There's something extra in here.
+Meh.
+
+[2]
+I didn't order all of this.
+Did you even read my order?
+Oh, an uninvited guest.
+
+[3]
+This is getting a bit crowded.
+Why is there so much extra stuff in here?
+Thanks... I guess...
+
+[4]
+I'm not sure what I'm looking at.
+That's... a lot of extra toppings.
+Bruh.
+Read the order next time.
+
+[5+]
+This is NOT what I ordered.
+I'm not tipping for this mess.
+Imbécile!
+Let me speak to your manager!

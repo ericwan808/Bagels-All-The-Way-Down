@@ -5,8 +5,9 @@ using System.Linq;
 namespace Bagels.Core
 {
     /// <summary>
-    /// What an order may put directly inside one kind of bread (design.md, "Orders"). The rules cover the bread's own
-    /// contents only; bread inside it follows its own rules. An empty bread is always allowed.
+    /// What an order may put inside one kind of bread (design.md, "Orders"). <see cref="AllowedSets"/> covers the
+    /// bread's direct contents only; <see cref="Limited"/> and <see cref="Highest"/> cover everything inside it, at any
+    /// depth. Bread inside it also follows its own rules. An empty bread is always allowed.
     /// </summary>
     public sealed class ContentRules
     {
@@ -18,12 +19,16 @@ namespace Bagels.Core
         /// </summary>
         public IReadOnlyList<IReadOnlyList<Symbol>> AllowedSets { get; }
 
-        /// <summary>At most <see cref="LimitedMax"/> of the contents, in total, may be any of these.</summary>
+        /// <summary>
+        /// At most <see cref="LimitedMax"/> of everything inside the bread, in total and at any depth, may be any of these.
+        /// </summary>
         public IReadOnlyCollection<Symbol> Limited { get; }
 
         public int LimitedMax { get; }
 
-        /// <summary>If set, no content may come after this component in the catalog (formula-list) order.</summary>
+        /// <summary>
+        /// If set, nothing inside the bread, at any depth, may come after this component in the catalog (formula-list) order.
+        /// </summary>
         public Symbol? Highest { get; }
 
         public ContentRules(IEnumerable<IEnumerable<Symbol>> allowedSets = null, IEnumerable<Symbol> limited = null,
@@ -42,13 +47,27 @@ namespace Bagels.Core
         public bool MayHold(Symbol symbol, Rules rules) =>
             Highest is not Symbol cap || rules.RankOf(symbol) <= rules.RankOf(cap);
 
-        /// <summary>True if an order may ask for exactly these contents.</summary>
-        public bool Allows(IReadOnlyCollection<Symbol> contents, Rules rules)
+        /// <summary>True if every rule that limits a whole subtree has room for these components.</summary>
+        public bool Fits(IEnumerable<Symbol> everything, Rules rules)
         {
-            if (contents.Count == 0) return true;
-            if (!contents.All(s => MayHold(s, rules))) return false;
-            if (contents.Count(IsLimited) > LimitedMax) return false;
-            return AllowedSets.Count == 0 || AllowedSets.Any(set => SameMultiset(set, contents));
+            int limited = 0;
+            foreach (var s in everything)
+            {
+                if (!MayHold(s, rules)) return false;
+                if (IsLimited(s) && ++limited > LimitedMax) return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// True if an order may ask for exactly these contents: <paramref name="direct"/> are the bread's own toppings,
+        /// <paramref name="everything"/> is every component inside it at any depth (the direct ones included).
+        /// </summary>
+        public bool Allows(IReadOnlyCollection<Symbol> direct, IEnumerable<Symbol> everything, Rules rules)
+        {
+            if (direct.Count == 0) return true;
+            if (!Fits(everything, rules)) return false;
+            return AllowedSets.Count == 0 || AllowedSets.Any(set => SameMultiset(set, direct));
         }
 
         static bool SameMultiset(IReadOnlyCollection<Symbol> a, IReadOnlyCollection<Symbol> b) =>

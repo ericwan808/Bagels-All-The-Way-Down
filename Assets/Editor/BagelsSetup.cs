@@ -75,7 +75,8 @@ public static class BagelsSetup
         // The design.md formula list: name, price (null = craft only) and formula, in product order, which is also
         // the unlock order. A, B and C are known from the start; F unlocks together with E. In orders, a C may hold
         // only bagels, an E two levels and an H three. A C holds one of a few topping sets; an E at most one G or I
-        // and nothing after I; an H at most one J or K.
+        // and nothing after I, and an H at most one J or K, counting everything inside them. G and after are
+        // high-level: one layer of an order holds only a few of them.
         var root = Pastry("Root", "Root Bread", Symbol.R, new Color(0.93f, 0.85f, 0.72f), LayoutKind.W7, null, true);
         var a = Pastry("A", "Everything bagel", Symbol.A, new Color(1f, 0.93f, 0.72f), LayoutKind.None, 0, true);
         var b = Pastry("B", "Everything bagel + Cream cheese", Symbol.B, new Color(0.96f, 0.75f, 0.40f), LayoutKind.None, 5, true);
@@ -93,6 +94,7 @@ public static class BagelsSetup
         e.EditorInitOrderContents(limitedContents: "GI", maxLimitedContents: 1, highestContent: Symbol.I);
         h.EditorInitOrderContents(limitedContents: "JK", maxLimitedContents: 1);
         foreach (var bread in new[] { c, e, h }) EditorUtility.SetDirty(bread);
+        foreach (var high in new[] { g, h, i, j, k, l }) high.EditorInitHighLevel();
 
         var types = new[] { root, a, b, c, d, e, f, g, h, i, j, k, l };
         PastryType TypeOf(Symbol s) => System.Array.Find(types, t => t.Symbol == s);

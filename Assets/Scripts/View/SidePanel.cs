@@ -62,6 +62,24 @@ namespace Bagels.View
         [SerializeField] RectTransform pageRoot;
         [SerializeField] RectTransform ordersRoot;
 
+        // Customer response after an order: a speech box over the board and a floating tip amount.
+        const float ResponseFadeIn = 0.25f;
+        const float ResponseLinger = 3f;
+        const float ResponseFadeOut = 0.6f;
+        const float TipVisible = 1f;       // how long the tip stays fully visible after fading in
+        const float TipFadeOut = 0.3f;
+        const float TipRise = 66f;         // how far the tip floats up, in canvas pixels: from the box's bottom edge to the top of the screen
+        const float ResponseMargin = 16f;  // from the top of the screen and the orders panel
+        static readonly Vector2 ResponseSize = new Vector2(340f, 64f);
+        static readonly Color TipGreen = new Color(0.45f, 0.95f, 0.4f);
+        static readonly Color TipRed = new Color(1f, 0.38f, 0.32f);
+
+        // Animation timings, in seconds.
+        const float CardFadeTime = 0.6f;   // a completed order fading away
+        const float CardSlideTime = 0.45f; // the orders below it sliding up, and a new one fading in
+        const float RevealTime = 1.0f;     // the grey box wiping away to reveal a newly unlocked formula
+        const float PulseSpeed = 6f;       // a page button pointing at an unseen new formula
+
         readonly List<(Order order, RectTransform card, Image background)> cards =
             new List<(Order, RectTransform, Image)>();
         RectTransform panel;
@@ -70,6 +88,18 @@ namespace Bagels.View
         int page;
         int knownFormulas = -1;
         Order highlighted;
+
+        // Orders: when each card first appeared (for its fade-in), when the cards may next slide (after a completed
+        // order has faded), and the layer the fading cards move to so a rebuild doesn't destroy them.
+        readonly Dictionary<int, float> cardAppeared = new Dictionary<int, float>();
+        float slideAt;
+        bool ordersShown;
+        RectTransform fadingRoot;
+
+        // Formulas: newly unlocked ones not yet shown, and when each reveal started.
+        readonly HashSet<Symbol> unseen = new HashSet<Symbol>();
+        readonly Dictionary<Symbol, float> revealStarted = new Dictionary<Symbol, float>();
+        bool newOnEarlierPage, newOnLaterPage;
 
         /// <summary>Fraction of the screen width the left panel covers (the canvas matches height, so this is exact).</summary>
         public static float ScreenFraction(float aspect) => Width / (ReferenceHeight * aspect);
@@ -144,6 +174,23 @@ namespace Bagels.View
         void OnEnable() => Hook();
         void OnDisable() => Unhook();
 
+        /// <summary>Pulses a page button while a newly unlocked formula waits, unseen, on that side.</summary>
+        void Update()
+        {
+            if (!Application.isPlaying) return;
+            float glow = 0.5f + 0.5f * Mathf.Sin(UiTween.Now * PulseSpeed);
+            Pulse(prevPage, newOnEarlierPage, glow);
+            Pulse(nextPage, newOnLaterPage, glow);
+        }
+
+        static readonly Color ButtonColor = ViewColors.Darken(Muted, 0.35f);
+
+        static void Pulse(Button button, bool on, float glow)
+        {
+            if (button == null || !(button.targetGraphic is Graphic g)) return;
+            g.color = on ? Color.Lerp(ButtonColor, Gold, glow) : ButtonColor;
+        }
+
         void Hook()
         {
             if (hooked || view == null || !Application.isPlaying) return;
@@ -186,6 +233,58 @@ namespace Bagels.View
             highlighted = order;
             foreach (var (o, _, bg) in cards)
                 if (bg != null) bg.color = o != order ? Card : fits ? CardGood : CardBad;
+        }
+
+        // ------------------------------------------------------------ customer response
+
+        RectTransform response;
+
+        /// <summary>
+        /// After an order is completed: a small box with the customer's <paramref name="line"/> fades in quickly in the
+        /// top-right corner of the board, next to the orders panel, lingers, and fades out. With it, the tip ("+$12" in
+        /// green, or a red "+0" for none) fades in beside the box and floats up to the top of the screen before
+        /// disappearing. A new response replaces one still showing.
+        /// </summary>
+        public void ShowCustomerResponse(string line, int tip)
+        {
+            if (!Application.isPlaying) return;
+            if (response != null) Destroy(response.gameObject);
+            float now = UiTween.Now;
+
+            // The outer rect fades out at the end; the inner one fades and pops in at the start. Both are positioned
+            // from the canvas's top-right corner, just left of the orders panel.
+            response = UiFactory.Rect("Customer Response", transform, ResponseSize);
+            response.anchorMin = response.anchorMax = Vector2.one;
+            response.pivot = Vector2.one;
+            response.anchoredPosition = new Vector2(-RightWidth - ResponseMargin, -ResponseMargin);
+            var box = UiFactory.Image("Box", response, null, new Color(Card.r, Card.g, Card.b, 0.96f), ResponseSize);
+            var inner = box.rectTransform;
+            inner.gameObject.AddComponent<Outline>().effectColor = Gold;
+            if (!string.IsNullOrEmpty(line))
+            {
+                var text = UiFactory.Text("Line", inner, $"“{line}”", 17, ViewColors.Paper, TextAnchor.MiddleCenter, FontStyle.Italic);
+                UiFactory.Fill(text.rectTransform);
+                text.rectTransform.offsetMin = new Vector2(12f, 6f);
+                text.rectTransform.offsetMax = new Vector2(-12f, -6f);
+            }
+            else box.enabled = false; // no lines written: just the tip
+            UiTween.On(inner, now, ResponseFadeIn).Fade(0f, 1f).Scale(Vector3.one * 0.9f, Vector3.one);
+            UiTween.On(response, now + ResponseFadeIn + ResponseLinger, ResponseFadeOut).Fade(1f, 0f).DestroyWhenDone();
+
+            // The tip starts just left of the box, level with its bottom edge, and rises to the top of the screen.
+            var tipSize = new Vector2(110f, 36f);
+            var tipRoot = UiFactory.Rect("Tip", transform, tipSize);
+            tipRoot.anchorMin = tipRoot.anchorMax = Vector2.one;
+            tipRoot.pivot = new Vector2(1f, 0.5f);
+            var start = new Vector2(-RightWidth - ResponseMargin - ResponseSize.x - 8f, -ResponseMargin - ResponseSize.y);
+            var tipText = UiFactory.Text("Amount", tipRoot, tip > 0 ? $"+${tip}" : "+0", 24,
+                                         tip > 0 ? TipGreen : TipRed, TextAnchor.MiddleRight, FontStyle.Bold);
+            UiFactory.Fill(tipText.rectTransform);
+            tipText.gameObject.AddComponent<Outline>().effectColor = new Color(0f, 0f, 0f, 0.6f);
+            float life = ResponseFadeIn + TipVisible + TipFadeOut;
+            UiTween.On(tipRoot, now, life).Move(start, start + new Vector2(0f, TipRise));
+            UiTween.On(tipText.rectTransform, now, ResponseFadeIn).Fade(0f, 1f);
+            UiTween.On(tipRoot, now + ResponseFadeIn + TipVisible, TipFadeOut).Fade(1f, 0f).DestroyWhenDone();
         }
 
         // ------------------------------------------------------------ fixed skeleton
@@ -252,7 +351,7 @@ namespace Bagels.View
                                              TextAnchor.MiddleLeft, FontStyle.Bold);
             UiFactory.Fill(ordersTitle.rectTransform);
             var ordersHint = UiFactory.Text("Hint", Block("Orders Hint", 40f),
-                "Drag items from the board onto an order. Bread must hold exactly what is listed.", 16, Muted);
+                "Drag items from the board onto an order. Extra toppings in bread are accepted but cut the tip.", 16, Muted);
             UiFactory.Fill(ordersHint.rectTransform);
             ordersRoot = Block("Order Cards", ReferenceHeight - cursor - LegendHeight - Pad - Gap);
             BuildLegend(Block("Legend", LegendHeight), RightWidth - 2 * Pad);
@@ -306,7 +405,7 @@ namespace Bagels.View
 
         static Button BuildButton(RectTransform block, string text, Vector2 topLeft, Vector2 size, out Text label)
         {
-            var img = UiFactory.Image($"{text} Button", block, null, ViewColors.Darken(Muted, 0.35f), size);
+            var img = UiFactory.Image($"{text} Button", block, null, ButtonColor, size);
             img.raycastTarget = true;
             Place(img.rectTransform, topLeft, size);
             var button = img.gameObject.AddComponent<Button>();
@@ -384,7 +483,8 @@ namespace Bagels.View
 
         /// <summary>
         /// Unlocked formulas in list order, then a greyed-out stand-in for the next unlock, split into pages that fit
-        /// the panel. After a new unlock the panel turns to the last page, where it appears.
+        /// the panel. A new unlock doesn't turn the page: it is revealed with an animation when its page is shown, and
+        /// until then the page button towards it pulses.
         /// </summary>
         void RebuildFormulaPage(GameSession session)
         {
@@ -415,8 +515,16 @@ namespace Bagels.View
             }
             pages.Add((start, heights.Count - start));
 
-            if (knownFormulas >= 0 && unlocked.Count > knownFormulas) page = pages.Count - 1;
+            // Formulas unlock in list order, so the new ones are at the end. Fewer than before means a new game.
+            if (unlocked.Count < knownFormulas)
+            {
+                unseen.Clear();
+                revealStarted.Clear();
+            }
+            else if (knownFormulas >= 0 && Application.isPlaying)
+                foreach (var f in unlocked.Skip(knownFormulas)) unseen.Add(f.Product.Symbol);
             knownFormulas = unlocked.Count;
+
             page = Mathf.Clamp(page, 0, pages.Count - 1);
             if (pageLabel != null) pageLabel.text = $"{page + 1}/{pages.Count}";
             if (prevPage != null) prevPage.interactable = page > 0;
@@ -431,7 +539,37 @@ namespace Bagels.View
                 else BuildLockedRow(next, session, y, width);
                 y += heights[i] + Gap;
             }
+
+            // Point the page buttons at any new formula still waiting on another page.
+            newOnEarlierPage = newOnLaterPage = false;
+            for (int i = 0; i < unlocked.Count; i++)
+            {
+                if (!unseen.Contains(unlocked[i].Product.Symbol)) continue;
+                int on = pages.FindIndex(p => i >= p.start && i < p.start + p.count);
+                newOnEarlierPage |= on < page;
+                newOnLaterPage |= on > page;
+            }
             MarkPreview(pageRoot);
+        }
+
+        /// <summary>
+        /// The reveal of a newly unlocked formula: a grey box like the locked stand-in covers the row and wipes away to
+        /// the right while the formula fades in and its product pops into place. Runs on absolute times, so a rebuild
+        /// part-way through carries on.
+        /// </summary>
+        void PlayReveal(RectTransform row, RectTransform icon, float start, float width, float height)
+        {
+            UiTween.On(row, start + 0.1f, RevealTime * 0.6f).Fade(0f, 1f);
+            UiTween.On(icon, start + RevealTime * 0.4f, RevealTime * 0.5f).Scale(Vector3.one * 0.4f, Vector3.one);
+
+            var cover = UiFactory.Image("Reveal", pageRoot, null, Locked, Vector2.zero);
+            var rt = cover.rectTransform;
+            Place(rt, new Vector2(0f, -row.anchoredPosition.y), new Vector2(width, height));
+            rt.pivot = new Vector2(1f, 1f); // shrink towards the right edge
+            rt.anchoredPosition += new Vector2(width, 0f);
+            var mark = UiFactory.Text("Mystery", rt, "?", 34, Muted, TextAnchor.MiddleCenter, FontStyle.Bold);
+            Place(mark.rectTransform, new Vector2(8f, 0f), new Vector2(48f, height));
+            UiTween.On(rt, start, RevealTime).Scale(Vector3.one, new Vector3(0f, 1f, 1f)).DestroyWhenDone();
         }
 
         static float RowHeight(FormulaAsset formula)
@@ -457,25 +595,36 @@ namespace Bagels.View
             var arrow = UiFactory.Text("Yields", row, "=", 34, Muted, TextAnchor.MiddleCenter, FontStyle.Bold);
             Place(arrow.rectTransform, new Vector2(238f, 0f), new Vector2(36f, diagramHeight));
 
-            // The product icon doubles as the shop: drag it out to buy one.
+            // The product icon doubles as the shop: drag it out to take a free copy from stock, or else buy one.
             float iconX = 238f + 36f + 40f;
             var icon = UiFactory.PastryIcon(row, product, 60f, view);
             At(icon, new Vector2(iconX, -diagramHeight * 0.5f + 8f));
             int? price = product.Price;
-            bool affordable = session.CanBuy(product.Symbol);
-            if (price != null)
+            int stocked = session.StockOf(product.Symbol);
+            bool available = session.CanTake(product.Symbol);
+            if (price != null || stocked > 0)
             {
                 icon.GetComponent<Image>().raycastTarget = true;
                 icon.gameObject.AddComponent<PastrySpawner>().Init(view, product.Symbol);
-                if (!affordable) icon.gameObject.AddComponent<CanvasGroup>().alpha = 0.45f;
+                if (!available) icon.gameObject.AddComponent<CanvasGroup>().alpha = 0.45f;
             }
-            var priceText = UiFactory.Text("Price", row, price != null ? $"${price}" : "craft only", 17,
-                                           affordable ? Gold : Muted, TextAnchor.MiddleCenter, FontStyle.Bold);
+            string priceLabel = stocked > 0 ? $"{stocked} free" : price != null ? $"${price}" : "craft only";
+            var priceText = UiFactory.Text("Price", row, priceLabel, 17,
+                                           available ? Gold : Muted, TextAnchor.MiddleCenter, FontStyle.Bold);
             Place(priceText.rectTransform, new Vector2(iconX - 45f, diagramHeight * 0.5f + 32f), new Vector2(90f, 20f));
 
             var caption = UiFactory.Text("Name", row, $"{product.Symbol}  ·  {product.DisplayName}", 15, Muted);
             caption.horizontalOverflow = HorizontalWrapMode.Overflow;
             Place(caption.rectTransform, new Vector2(4f, diagramHeight), new Vector2(width - 8f, Caption));
+
+            // A new unlock is revealed the first time its row is shown.
+            if (!Application.isPlaying) return;
+            if (unseen.Remove(product.Symbol)) revealStarted[product.Symbol] = UiTween.Now;
+            if (revealStarted.TryGetValue(product.Symbol, out float start))
+            {
+                if (UiTween.Now < start + RevealTime) PlayReveal(row, icon, start, width, height);
+                else revealStarted.Remove(product.Symbol);
+            }
         }
 
         void BuildLockedRow(PastryInfo next, GameSession session, float y, float width)
@@ -501,16 +650,59 @@ namespace Bagels.View
             return $"Unlocks when you craft a {previous?.Name ?? "previous component"}";
         }
 
+        /// <summary>
+        /// Rebuilds the order cards. In Play mode a completed order's card fades away, then the cards below slide up
+        /// and a new order fades in at the bottom. A rebuild part-way through picks up from where each card is drawn.
+        /// </summary>
         void RebuildOrders(GameSession session)
         {
             if (ordersRoot == null) return;
+            bool animate = Application.isPlaying && ordersShown;
+            float now = UiTween.Now;
+
+            // Where each still-active card is drawn right now; cards of orders that are gone fade away.
+            var drawnAt = new Dictionary<int, Vector2>();
+            if (animate)
+                foreach (var (order, card, bg) in cards)
+                {
+                    if (card == null) continue;
+                    if (session.Orders.Contains(order)) drawnAt[order.Id] = card.anchoredPosition;
+                    else
+                    {
+                        FadeAway(card, bg, now);
+                        slideAt = Mathf.Max(slideAt, now + CardFadeTime);
+                    }
+                }
             Clear(ordersRoot);
             cards.Clear();
             float width = ordersRoot.rect.width > 0 ? ordersRoot.rect.width : RightWidth - 2 * Pad;
             float y = 0f;
+            float moveStart = Mathf.Max(now, slideAt);
             // The final order first: it is the goal.
             foreach (var order in session.Orders.OrderByDescending(o => o.IsFinal))
+            {
                 y += BuildOrderCard(order, y, width) + Gap * 2f;
+                var card = cards[cards.Count - 1].card;
+                if (!animate) continue;
+                if (drawnAt.TryGetValue(order.Id, out var from))
+                {
+                    if (from != card.anchoredPosition)
+                        UiTween.On(card, moveStart, CardSlideTime).Move(from, card.anchoredPosition);
+                }
+                else if (!cardAppeared.ContainsKey(order.Id)) cardAppeared[order.Id] = moveStart;
+                if (cardAppeared.TryGetValue(order.Id, out float appeared))
+                {
+                    if (now < appeared + CardSlideTime)
+                    {
+                        var to = card.anchoredPosition;
+                        UiTween.On(card, appeared, CardSlideTime).Fade(0f, 1f);
+                        if (!drawnAt.ContainsKey(order.Id))
+                            UiTween.On(card, appeared, CardSlideTime).Move(to + new Vector2(0f, -40f), to);
+                    }
+                    else cardAppeared.Remove(order.Id);
+                }
+            }
+            ordersShown = Application.isPlaying;
             if (session.Won)
             {
                 var done = UiFactory.Text("Won", ordersRoot, "All done!", 22, Gold, TextAnchor.UpperLeft, FontStyle.Bold);
@@ -518,6 +710,30 @@ namespace Bagels.View
             }
             HighlightOrder(highlighted != null && session.Orders.Contains(highlighted) ? highlighted : null, false);
             MarkPreview(ordersRoot);
+        }
+
+        /// <summary>
+        /// Moves a finished order's card to a layer the rebuild leaves alone, tints it green and fades it out.
+        /// </summary>
+        void FadeAway(RectTransform card, Image background, float now)
+        {
+            if (fadingRoot == null)
+            {
+                fadingRoot = UiFactory.Rect("Fading Orders", ordersRoot.parent, Vector2.zero);
+                fadingRoot.anchorMin = ordersRoot.anchorMin;
+                fadingRoot.anchorMax = ordersRoot.anchorMax;
+                fadingRoot.pivot = ordersRoot.pivot;
+                fadingRoot.offsetMin = ordersRoot.offsetMin;
+                fadingRoot.offsetMax = ordersRoot.offsetMax;
+                fadingRoot.SetSiblingIndex(ordersRoot.GetSiblingIndex()); // drawn under the live cards
+            }
+            card.SetParent(fadingRoot, false);
+            if (background != null)
+            {
+                background.raycastTarget = false;
+                background.color = CardGood;
+            }
+            UiTween.On(card, now, CardFadeTime).Fade(1f, 0f).Scale(Vector3.one, new Vector3(0.94f, 0.94f, 1f)).DestroyWhenDone();
         }
 
         float BuildOrderCard(Order order, float y, float width)
@@ -530,7 +746,8 @@ namespace Bagels.View
             cards.Add((order, card, bg));
 
             int filled = Enumerable.Range(0, order.Items.Count).Count(order.IsFilled);
-            string title = order.IsFinal ? "FINAL ORDER: deliver it to win" : $"Order #{order.Id}  ·  pays ${order.Reward}";
+            string title = order.IsFinal ? "FINAL ORDER: deliver it to win" : $"Order #{order.Id}  ·  {order.RewardText()}" +
+                (order.Imperfections > 0 ? $"  ({order.Imperfections} extra)" : "");
             var header = UiFactory.Text("Header", card, title, 18, order.IsFinal ? Gold : ViewColors.Paper,
                                         TextAnchor.MiddleLeft, FontStyle.Bold);
             Place(header.rectTransform, new Vector2(10f, 4f), new Vector2(width - 70f, 28f));

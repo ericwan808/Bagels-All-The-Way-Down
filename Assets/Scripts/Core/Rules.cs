@@ -29,9 +29,15 @@ namespace Bagels.Core
         /// <summary>For bread: what an order may put directly inside it, beyond the nesting limit.</summary>
         public ContentRules ContentRules { get; }
 
+        /// <summary>
+        /// Counts as high-level in orders (G and after): one layer of an order holds only a few of these.
+        /// </summary>
+        public bool HighLevel { get; }
+
         public PastryInfo(Symbol symbol, string name, int? price, bool unlockedAtStart = false, bool unlocksWithPrevious = false,
-                          int orderLevels = 1, ContentRules contentRules = null)
+                          int orderLevels = 1, ContentRules contentRules = null, bool highLevel = false)
         {
+            HighLevel = highLevel;
             OrderLevels = Math.Max(1, orderLevels);
             ContentRules = contentRules ?? ContentRules.Any;
             Symbol = symbol;
@@ -101,6 +107,9 @@ namespace Bagels.Core
         public ContentRules ContentRulesOf(Symbol symbol) => InfoOf(symbol)?.ContentRules ?? ContentRules.Any;
 
         public bool IsBread(Symbol symbol) => breadLayouts.ContainsKey(symbol);
+
+        /// <summary>True if <paramref name="symbol"/> counts as high-level in orders (see <see cref="PastryInfo.HighLevel"/>).</summary>
+        public bool IsHighLevel(Symbol symbol) => InfoOf(symbol)?.HighLevel ?? false;
 
         /// <summary>The board layout for a bread symbol, or null if the symbol is a plain bagel.</summary>
         public BoardLayout LayoutOf(Symbol symbol) =>

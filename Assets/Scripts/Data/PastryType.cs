@@ -28,14 +28,18 @@ namespace Bagels.Data
         [SerializeField] bool unlocksWithPrevious;
         [Tooltip("Bread only: how many levels deep an order may fill it (C 1 = only bagels inside, E 2, H 3).")]
         [Min(1)] [SerializeField] int orderLevels = 1;
+        [Tooltip("Counts as high-level in orders (G and after): one layer of an order usually holds at most 2 of these, never more than 3.")]
+        [SerializeField] bool highLevel;
         [Header("Order contents (bread only)")]
         [Tooltip("If not empty, an order may fill this bread only with exactly one of these topping sets, each written " +
                  "as letters (BA = a B and an A). It may still be ordered empty.")]
         [SerializeField] string[] allowedContents = System.Array.Empty<string>();
-        [Tooltip("Toppings, as letters (e.g. GI), of which an order may put at most Max Limited Contents in total.")]
+        [Tooltip("Components, as letters (e.g. GI), of which an order may put at most Max Limited Contents in total " +
+                 "anywhere inside this bread, nested breads included.")]
         [SerializeField] string limitedContents = "";
         [Min(0)] [SerializeField] int maxLimitedContents = 1;
-        [Tooltip("If on, an order may not fill this bread with anything after Highest Content in the formula list.")]
+        [Tooltip("If on, an order may not put anything after Highest Content in the formula list anywhere inside this " +
+                 "bread, nested breads included.")]
         [SerializeField] bool capContents;
         [SerializeField] Symbol highestContent;
 
@@ -52,7 +56,7 @@ namespace Bagels.Data
         public int OrderLevels => orderLevels;
 
         public PastryInfo ToInfo() =>
-            new PastryInfo(symbol, DisplayName, Price, unlockedAtStart, unlocksWithPrevious, orderLevels, ToContentRules());
+            new PastryInfo(symbol, DisplayName, Price, unlockedAtStart, unlocksWithPrevious, orderLevels, ToContentRules(), highLevel);
 
         public ContentRules ToContentRules() => new ContentRules(
             (allowedContents ?? System.Array.Empty<string>()).Where(s => !string.IsNullOrWhiteSpace(s)).Select(ContentRules.ParseSymbols),
@@ -82,6 +86,7 @@ namespace Bagels.Data
         /// <summary>Used by editor tooling. A null price makes the component craft-only.</summary>
         public void EditorInitEconomy(int? price, bool unlockedAtStart, bool unlocksWithPrevious = false, int orderLevels = 1)
         {
+            highLevel = false;
             this.orderLevels = Mathf.Max(1, orderLevels);
             purchasable = price != null;
             this.price = price ?? 0;
@@ -89,11 +94,19 @@ namespace Bagels.Data
             this.unlocksWithPrevious = unlocksWithPrevious;
         }
 
+        /// <summary>Used by editor tooling: marks this component as high-level in orders (call after EditorInitEconomy).</summary>
+        public void EditorInitHighLevel()
+        {
+            highLevel = true;
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+
         /// <summary>Used by editor tooling: what an order may put inside this bread (see <see cref="ContentRules"/>).</summary>
         public void EditorInitOrderContents(string[] allowedContents = null, string limitedContents = "",
                                             int maxLimitedContents = 1, Symbol? highestContent = null)
         {
             this.allowedContents = allowedContents ?? System.Array.Empty<string>();
+            // The limits on limitedContents and highestContent count everything inside the bread, at any depth.
             this.limitedContents = limitedContents ?? "";
             this.maxLimitedContents = Mathf.Max(0, maxLimitedContents);
             capContents = highestContent != null;
