@@ -22,3 +22,14 @@ MonoBehaviour:
   unlockedAtStart: 1
   unlocksWithPrevious: 0
   orderLevels: 1
+  allowedContents:
+  - A
+  - BA
+  - D
+  - DA
+  - DB
+  - F
+  limitedContents:
+  maxLimitedContents: 1
+  capContents: 0
+  highestContent: 0

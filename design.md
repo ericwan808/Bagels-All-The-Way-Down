@@ -58,6 +58,10 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - The game starts with 1 order, and at most 3 orders are active at a time.
 - When an order is fulfilled, a replacement order is generated right away. If fewer than 3 orders are active after that, one more is added.
 - For recursion in orders, Cs are limited to one level of recusion (they must directly hold bagels or nothing, not breads), Es can have two levels, and Hs can have three. This counts from the top-most level.
+- Each bread also limits which toppings (direct contents) an order may put in it. A bread may still be ordered empty, and these limits only apply to the bread's own toppings, not to what is inside a nested bread:
+  - A C holds exactly one of these sets: A, B+A, D, D+A, D+B or F.
+  - An E holds at most one G or I in total, and nothing after I in the formula list (no J, K or L).
+  - An H holds at most one J or K in total.
 
 ### Winning
 - The final target bagel (L) can be crafted anywhere on the board.

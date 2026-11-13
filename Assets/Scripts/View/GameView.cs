@@ -25,13 +25,19 @@ namespace Bagels.View
     /// the parent. Zooming never moves the camera: the board objects themselves are moved, scaled and faded.
     /// </para>
     /// <para>
+    /// When a placement sets off formulas, each step of the cascade is replayed from the tree as it was just before
+    /// that step: the consumed components fly into the slot where the product lands and fade, then the next step
+    /// plays. Components from a board above the current one come down from off-screen, shrinking as they fall;
+    /// components from deeper boards rise out of them, growing.
+    /// </para>
+    /// <para>
     /// Outside Play mode the starting board is drawn as a preview so the scene isn't empty. Preview objects are
     /// flagged <see cref="HideFlags.DontSave"/>, so they never end up in the scene file, and are rebuilt when the
     /// scene loads or a setting changes. The side panel, by contrast, is saved into the scene by editor tooling.
     /// </para>
     /// </summary>
     [ExecuteAlways]
-    public sealed class GameView : MonoBehaviour
+    public sealed partial class GameView : MonoBehaviour
     {
         /// <summary>An empty slot the player can drop an A into.</summary>
         public sealed class SlotTarget
@@ -77,6 +83,11 @@ namespace Bagels.View
         [SerializeField] float zoomDuration = 0.45f;
         [Tooltip("Seconds after a zoom during which further scrolling is ignored, so one flick moves one level.")]
         [SerializeField] float scrollCooldown = 0.15f;
+        [Header("Formulas")]
+        [Tooltip("Seconds each formula of a cascade takes to merge its components into the product's slot.")]
+        [SerializeField] float mergeDuration = 0.5f;
+        [Tooltip("Size of the merging components, relative to the product's slot, when they reach it.")]
+        [SerializeField] float mergeEndScale = 0.55f;
         [Header("Input")]
         [Tooltip("Most seconds between the two clicks of a double click that places an A in an empty slot.")]
         [SerializeField] float doubleClickTime = 0.35f;
@@ -135,6 +146,7 @@ namespace Bagels.View
         int drawOrderOffset;
         bool drawInteractive;
         Element drawSkip;
+        readonly HashSet<Element> drawHidden = new HashSet<Element>();
 
         public LevelAsset Level => level;
         public Rules Rules => rules;
@@ -154,7 +166,7 @@ namespace Bagels.View
         /// <summary>The bread whose board is the current board. The root unless the player has zoomed in.</summary>
         public Element Focus => focus;
 
-        /// <summary>True while a zoom animation plays. Placement is disabled meanwhile.</summary>
+        /// <summary>True while a zoom or formula animation plays. Placement is disabled meanwhile.</summary>
         public bool IsZooming => transition != null;
 
         /// <summary>True while a component picked up from the side panel follows the pointer.</summary>
@@ -209,7 +221,10 @@ namespace Bagels.View
             CancelCarry();
             CancelElementDrag();
             // Play gets fresh orders every time; the edit-mode preview stays the same between redraws.
-            session = new GameSession(rules, Application.isPlaying ? Environment.TickCount : 0);
+            session = new GameSession(rules, Application.isPlaying ? Environment.TickCount : 0)
+            {
+                RecordSnapshots = Application.isPlaying, // for replaying cascades
+            };
             focus = State.Root;
             LastResult = null;
             LastError = null;
@@ -265,6 +280,7 @@ namespace Bagels.View
                 Say(refusal);
                 return;
             }
+            var focusPath = TreePath.Of(focus);
             try
             {
                 LastResult = session.Place(board, slot, symbol);
@@ -277,6 +293,11 @@ namespace Bagels.View
                 Debug.LogError(e.Message, this);
             }
             Message = Unlocked();
+            if (Application.isPlaying && LastResult != null && LastResult.Steps.Count > 0 && LastResult.Steps[0].Before != null)
+            {
+                transition = StartCoroutine(PlayCascade(LastResult.Steps, focusPath));
+                return; // the animation redraws and raises Changed when it ends
+            }
             Redraw(); // also moves the focus up if a cascade consumed the current board
             Changed?.Invoke();
         }
@@ -352,14 +373,7 @@ namespace Bagels.View
             CancelElementDrag();
             var focusPath = TreePath.Of(focus);
             session.Undo();
-            focus = State.Root;
-            // Walk down the old focus path as far as it still leads to bread.
-            foreach (int slot in focusPath)
-            {
-                var board = focus.Child;
-                if (slot >= board.SlotCount || board.IsEmpty(slot) || !board[slot].IsBread) break;
-                focus = board[slot];
-            }
+            focus = BreadAlong(State, focusPath);
             LastResult = null;
             LastError = null;
             Message = null;
@@ -675,10 +689,8 @@ namespace Bagels.View
         /// <summary>Where <paramref name="child"/> is drawn when <paramref name="parent"/> is the current board.</summary>
         void ChildPlacement(Element parent, Element child, out Vector2 center, out float radius)
         {
-            var layout = parent.Child.Layout;
-            float scale = BoardScale(layout, rootRadius, depth: 0);
-            center = (Vector2)transform.position + LayoutGeometry.Positions(layout)[child.SlotIndex] * scale;
-            radius = LayoutGeometry.SlotRadius(layout) * scale * 0.9f;
+            ChildOf(FocusFrame, parent.Child.Layout, child.SlotIndex, out center, out var slotRadius);
+            radius = slotRadius * 0.9f;
         }
 
         /// <summary>Multiplies the alpha of every sprite and letter in a frame.</summary>
@@ -739,6 +751,7 @@ namespace Bagels.View
             drawSkip = skip;
             DrawBread(focusBread, transform.position, rootRadius, 0);
             drawRoot = null;
+            drawOrderOffset = 0;
             return root;
         }
 
@@ -778,7 +791,7 @@ namespace Bagels.View
                     if (drawInteractive)
                         targets.Add(new SlotTarget { Board = board, Slot = i, Center = p, Radius = slotRadius, Ring = ring, RingColor = ink });
                 }
-                else if (element == drawSkip) { }
+                else if (element == drawSkip || drawHidden.Contains(element)) { }
                 else
                 {
                     if (element.IsBread && depth + 1 <= OpenDepth)

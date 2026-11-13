@@ -33,13 +33,23 @@ namespace Bagels.Core.Tests
             var catalog = List.Select(r => new PastryInfo(r.symbol, r.name, r.price,
                                                           unlockedAtStart: r.symbol <= Symbol.C,
                                                           unlocksWithPrevious: r.symbol == Symbol.F,
-                                                          orderLevels: r.symbol == Symbol.H ? 3 : r.symbol == Symbol.E ? 2 : 1));
+                                                          orderLevels: r.symbol == Symbol.H ? 3 : r.symbol == Symbol.E ? 2 : 1,
+                                                          contentRules: ContentRulesFor(r.symbol)));
             var bread = new Dictionary<Symbol, BoardLayout>
             {
                 [Root] = BoardLayout.W7, [Symbol.C] = BoardLayout.K3, [Symbol.E] = BoardLayout.K23, [Symbol.H] = BoardLayout.W7,
             };
             return new Rules(Root, formulas, bread, Symbol.L, catalog);
         }
+
+        /// <summary>design.md, "Orders": what each bread may hold in an order.</summary>
+        static ContentRules ContentRulesFor(Symbol symbol) => symbol switch
+        {
+            Symbol.C => new ContentRules(new[] { "A", "BA", "D", "DA", "DB", "F" }.Select(ContentRules.ParseSymbols)),
+            Symbol.E => new ContentRules(limited: new[] { Symbol.G, Symbol.I }, limitedMax: 1, highest: Symbol.I),
+            Symbol.H => new ContentRules(limited: new[] { Symbol.J, Symbol.K }, limitedMax: 1),
+            _ => null,
+        };
 
         GameSession session;
         Board root;
@@ -295,6 +305,7 @@ namespace Bagels.Core.Tests
                     foreach (var item in order.Items)
                     {
                         Assert.IsTrue(item.WithinNestingLimits(rules), $"{item} nests too deep");
+                        Assert.IsTrue(item.FollowsContentRules(rules), $"{item} holds toppings its bread doesn't allow");
                         int levels = item.Levels(rules);
                         if (levels > maxLevels[item.Symbol]) maxLevels[item.Symbol] = levels;
                         AssertAvailable(item, progress, rules);
@@ -320,6 +331,33 @@ namespace Bagels.Core.Tests
             Assert.IsTrue(I(Symbol.H, I(Symbol.E, I(Symbol.C, I(Symbol.A)))).WithinNestingLimits(rules));
             Assert.IsFalse(I(Symbol.H, I(Symbol.C, I(Symbol.C))).WithinNestingLimits(rules), "the inner C still holds only bagels");
             Assert.IsFalse(I(Symbol.H, I(Symbol.H, I(Symbol.H, I(Symbol.C)))).WithinNestingLimits(rules), "four levels from the top");
+        }
+
+        [Test]
+        public void ContentRules_CToppingSets_EAndHLimits()
+        {
+            var rules = FullRules();
+            ItemSpec I(Symbol s, params ItemSpec[] c) => new ItemSpec(s, c);
+            ItemSpec Bread(Symbol s, string letters) =>
+                I(s, ContentRules.ParseSymbols(letters).Select(x => I(x)).ToArray());
+
+            foreach (var ok in new[] { "", "A", "BA", "AB", "D", "DA", "DB", "F" })
+                Assert.IsTrue(Bread(Symbol.C, ok).FollowsContentRules(rules), $"C({ok})");
+            foreach (var bad in new[] { "B", "AA", "DD", "FA", "DBA", "G" })
+                Assert.IsFalse(Bread(Symbol.C, bad).FollowsContentRules(rules), $"C({bad})");
+
+            Assert.IsTrue(Bread(Symbol.E, "GDA").FollowsContentRules(rules));
+            Assert.IsTrue(Bread(Symbol.E, "IF").FollowsContentRules(rules));
+            Assert.IsFalse(Bread(Symbol.E, "GG").FollowsContentRules(rules), "two Gs");
+            Assert.IsFalse(Bread(Symbol.E, "GI").FollowsContentRules(rules), "a G and an I");
+            Assert.IsFalse(Bread(Symbol.E, "J").FollowsContentRules(rules), "J comes after I");
+            Assert.IsTrue(I(Symbol.E, I(Symbol.C, I(Symbol.D))).FollowsContentRules(rules));
+            Assert.IsFalse(I(Symbol.E, I(Symbol.C, I(Symbol.B))).FollowsContentRules(rules), "the inner C follows its own sets");
+
+            Assert.IsTrue(Bread(Symbol.H, "JGG").FollowsContentRules(rules));
+            Assert.IsFalse(Bread(Symbol.H, "JJ").FollowsContentRules(rules), "two Js");
+            Assert.IsFalse(Bread(Symbol.H, "JK").FollowsContentRules(rules), "a J and a K");
+            Assert.IsTrue(I(Symbol.H, I(Symbol.J), I(Symbol.E, I(Symbol.G))).FollowsContentRules(rules), "nested Gs don't count for H");
         }
 
         [Test]

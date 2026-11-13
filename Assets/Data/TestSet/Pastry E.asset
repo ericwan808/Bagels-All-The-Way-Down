@@ -22,3 +22,8 @@ MonoBehaviour:
   unlockedAtStart: 0
   unlocksWithPrevious: 0
   orderLevels: 2
+  allowedContents: []
+  limitedContents: GI
+  maxLimitedContents: 1
+  capContents: 1
+  highestContent: 8

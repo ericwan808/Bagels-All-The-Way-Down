@@ -26,10 +26,14 @@ namespace Bagels.Core
         /// </summary>
         public int OrderLevels { get; }
 
+        /// <summary>For bread: what an order may put directly inside it, beyond the nesting limit.</summary>
+        public ContentRules ContentRules { get; }
+
         public PastryInfo(Symbol symbol, string name, int? price, bool unlockedAtStart = false, bool unlocksWithPrevious = false,
-                          int orderLevels = 1)
+                          int orderLevels = 1, ContentRules contentRules = null)
         {
             OrderLevels = Math.Max(1, orderLevels);
+            ContentRules = contentRules ?? ContentRules.Any;
             Symbol = symbol;
             Name = name ?? symbol.ToString();
             Price = price;
@@ -45,6 +49,7 @@ namespace Bagels.Core
     {
         readonly Dictionary<Symbol, BoardLayout> breadLayouts;
         readonly Dictionary<Symbol, Formula[]> bySymbol = new Dictionary<Symbol, Formula[]>();
+        readonly Dictionary<Symbol, int> rank = new Dictionary<Symbol, int>(); // first catalog index of each symbol
 
         public Symbol RootSymbol { get; }
 
@@ -64,6 +69,8 @@ namespace Bagels.Core
                      IEnumerable<PastryInfo> catalog = null)
         {
             Catalog = (catalog ?? Enumerable.Empty<PastryInfo>()).ToArray();
+            for (int i = 0; i < Catalog.Count; i++)
+                if (!rank.ContainsKey(Catalog[i].Symbol)) rank[Catalog[i].Symbol] = i;
             this.breadLayouts = breadLayouts.ToDictionary(kv => kv.Key, kv => kv.Value);
             if (!this.breadLayouts.ContainsKey(rootSymbol))
                 throw new ArgumentException($"Root symbol {rootSymbol} must be bread (have a board layout).");
@@ -83,14 +90,15 @@ namespace Bagels.Core
             return list;
         }
 
-        public PastryInfo InfoOf(Symbol symbol)
-        {
-            foreach (var info in Catalog)
-                if (info.Symbol == symbol) return info;
-            return null;
-        }
+        public PastryInfo InfoOf(Symbol symbol) => rank.TryGetValue(symbol, out int i) ? Catalog[i] : null;
 
         public int? PriceOf(Symbol symbol) => InfoOf(symbol)?.Price;
+
+        /// <summary>Position in the catalog (formula-list) order, or -1 if the symbol is not in it.</summary>
+        public int RankOf(Symbol symbol) => rank.TryGetValue(symbol, out int i) ? i : -1;
+
+        /// <summary>The content rules of a bread symbol; <see cref="ContentRules.Any"/> if it has none.</summary>
+        public ContentRules ContentRulesOf(Symbol symbol) => InfoOf(symbol)?.ContentRules ?? ContentRules.Any;
 
         public bool IsBread(Symbol symbol) => breadLayouts.ContainsKey(symbol);
 

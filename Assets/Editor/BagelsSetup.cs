@@ -74,7 +74,8 @@ public static class BagelsSetup
         EnsureDir(DataDir);
         // The design.md formula list: name, price (null = craft only) and formula, in product order, which is also
         // the unlock order. A, B and C are known from the start; F unlocks together with E. In orders, a C may hold
-        // only bagels, an E two levels and an H three.
+        // only bagels, an E two levels and an H three. A C holds one of a few topping sets; an E at most one G or I
+        // and nothing after I; an H at most one J or K.
         var root = Pastry("Root", "Root Bread", Symbol.R, new Color(0.93f, 0.85f, 0.72f), LayoutKind.W7, null, true);
         var a = Pastry("A", "Everything bagel", Symbol.A, new Color(1f, 0.93f, 0.72f), LayoutKind.None, 0, true);
         var b = Pastry("B", "Everything bagel + Cream cheese", Symbol.B, new Color(0.96f, 0.75f, 0.40f), LayoutKind.None, 5, true);
@@ -88,6 +89,10 @@ public static class BagelsSetup
         var j = Pastry("J", "Galaxy bagel", Symbol.J, new Color(0.88f, 0.52f, 0.62f), LayoutKind.None, 400);
         var k = Pastry("K", "Bagel on a turtle on a bagel on a turtle", Symbol.K, new Color(0.45f, 0.70f, 0.45f), LayoutKind.None, null);
         var l = Pastry("L", "True plain bagel", Symbol.L, new Color(0.98f, 0.84f, 0.25f), LayoutKind.None, null);
+        c.EditorInitOrderContents(allowedContents: new[] { "A", "BA", "D", "DA", "DB", "F" });
+        e.EditorInitOrderContents(limitedContents: "GI", maxLimitedContents: 1, highestContent: Symbol.I);
+        h.EditorInitOrderContents(limitedContents: "JK", maxLimitedContents: 1);
+        foreach (var bread in new[] { c, e, h }) EditorUtility.SetDirty(bread);
 
         var types = new[] { root, a, b, c, d, e, f, g, h, i, j, k, l };
         PastryType TypeOf(Symbol s) => System.Array.Find(types, t => t.Symbol == s);

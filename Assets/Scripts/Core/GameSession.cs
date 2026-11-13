@@ -46,6 +46,13 @@ namespace Bagels.Core
         public int UndoCount => undo.Count;
         public bool CanUndo => undo.Count > 0;
 
+        /// <summary>Whether cascade steps carry snapshots for replaying (see <see cref="GameState.RecordSnapshots"/>).</summary>
+        public bool RecordSnapshots
+        {
+            get => State.RecordSnapshots;
+            set => State.RecordSnapshots = value; // undo snapshots are clones, so they keep the setting
+        }
+
         /// <summary>Components unlocked by the last action, for the view to announce.</summary>
         public IReadOnlyList<PastryInfo> LastUnlocked { get; private set; } = Array.Empty<PastryInfo>();
 

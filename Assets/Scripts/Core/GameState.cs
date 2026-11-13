@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Bagels.Core
 {
@@ -12,13 +13,29 @@ namespace Bagels.Core
         public Board Board { get; }
         public int Slot { get; }
 
-        internal CascadeStep(Formula formula, IReadOnlyList<Element> consumed, Element product, Board board, int slot)
+        /// <summary>
+        /// A copy of the whole tree just before this step fired, or null unless
+        /// <see cref="GameState.RecordSnapshots"/> was on. The paths below address elements in this copy.
+        /// </summary>
+        public GameState Before { get; }
+
+        /// <summary><see cref="TreePath"/>s of the <see cref="Consumed"/> elements, in the same order.</summary>
+        public IReadOnlyList<int[]> ConsumedPaths { get; }
+
+        /// <summary>The path of the slot the product lands in: the path of the board's owner, then the slot.</summary>
+        public int[] ProductPath { get; }
+
+        internal CascadeStep(Formula formula, IReadOnlyList<Element> consumed, Element product, Board board, int slot,
+                             GameState before, IReadOnlyList<int[]> consumedPaths)
         {
             Formula = formula;
             Consumed = consumed;
             Product = product;
             Board = board;
             Slot = slot;
+            Before = before;
+            ConsumedPaths = consumedPaths;
+            ProductPath = TreePath.Of(product);
         }
     }
 
@@ -66,6 +83,13 @@ namespace Bagels.Core
         /// </summary>
         public Func<Symbol, bool> IsActive { get; set; }
 
+        /// <summary>
+        /// When on, every <see cref="CascadeStep"/> carries a copy of the tree from just before it fired
+        /// (<see cref="CascadeStep.Before"/>), so a view can replay the cascade. Off by default: it costs a deep copy
+        /// per step. Copied by <see cref="Clone"/>.
+        /// </summary>
+        public bool RecordSnapshots { get; set; }
+
         public GameState(Rules rules)
         {
             Rules = rules ?? throw new ArgumentNullException(nameof(rules));
@@ -84,7 +108,7 @@ namespace Bagels.Core
         {
             var root = new Element(Root.Symbol, Root.Child.Layout);
             CopyInto(Root.Child, root.Child);
-            return new GameState(Rules, root, IsActive);
+            return new GameState(Rules, root, IsActive) { RecordSnapshots = RecordSnapshots };
         }
 
         static void CopyInto(Board from, Board to)
@@ -181,6 +205,7 @@ namespace Bagels.Core
 
         CascadeStep Apply(Match match)
         {
+            var before = RecordSnapshots ? Clone() : null;
             var trigger = match.Trigger;
             var consumed = new List<Element>();
             for (int i = 0; i < match.Elements.Count; i++)
@@ -189,6 +214,7 @@ namespace Bagels.Core
                 if (!match.Formula.Nodes[i].IsCatalyst || e == trigger) consumed.Add(e);
             }
 
+            var consumedPaths = consumed.Select(TreePath.Of).ToArray();
             foreach (var e in consumed)
             {
                 e.Location.Clear(e.SlotIndex);
@@ -208,7 +234,7 @@ namespace Bagels.Core
 
             var product = Create(match.Formula.Product);
             board.Put(slot, product);
-            return new CascadeStep(match.Formula, consumed, product, board, slot);
+            return new CascadeStep(match.Formula, consumed, product, board, slot, before, consumedPaths);
         }
 
         // Consumed boards simply destroy their contents.

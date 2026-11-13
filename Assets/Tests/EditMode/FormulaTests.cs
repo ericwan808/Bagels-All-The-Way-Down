@@ -175,6 +175,36 @@ namespace Bagels.Core.Tests
         }
 
         [Test]
+        public void Cascade_RecordsSnapshotBeforeEachStep()
+        {
+            var pz = F("PZ->Q", Symbol.Q, new[] { N(Symbol.P), N(Symbol.Z) }, Edge(0, 1));
+            var game = Game(XYtoP, pz);
+            game.RecordSnapshots = true;
+            var root = game.RootBoard;
+            game.Place(root, 3, Symbol.Z);
+            game.Place(root, 1, Symbol.X);
+            var result = game.Place(root, 2, Symbol.Y);
+
+            var first = result.Steps[0];
+            Assert.AreEqual(Symbol.X, TreePath.Find(first.Before, first.ConsumedPaths[0]).Symbol);
+            Assert.AreEqual(Symbol.Y, TreePath.Find(first.Before, new[] { 2 }).Symbol, "snapshot holds the placed Y");
+            CollectionAssert.AreEqual(new[] { 2 }, first.ProductPath);
+
+            var second = result.Steps[1];
+            Assert.AreEqual(Symbol.P, TreePath.Find(second.Before, new[] { 2 }).Symbol, "snapshot holds the first product");
+            Assert.AreEqual(2, second.ConsumedPaths.Count);
+            Assert.AreSame(root[2], second.Product, "snapshots are copies; the live tree moves on");
+        }
+
+        [Test]
+        public void Cascade_RecordsNoSnapshotsByDefault()
+        {
+            var game = Game(XYtoP);
+            game.Place(game.RootBoard, 1, Symbol.X);
+            Assert.IsNull(game.Place(game.RootBoard, 2, Symbol.Y).Steps[0].Before);
+        }
+
+        [Test]
         public void BreadProduct_IsAnEmptyBoard()
         {
             var makeC = F("XY->C", Symbol.C, new[] { N(Symbol.X), N(Symbol.Y) }, Edge(0, 1));

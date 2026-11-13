@@ -68,6 +68,14 @@ namespace Bagels.Core
             return true;
         }
 
+        /// <summary>
+        /// True if every bread in this item holds only what its <see cref="ContentRules"/> allow, e.g. a C holds one of
+        /// its listed topping sets.
+        /// </summary>
+        public bool FollowsContentRules(Rules rules) =>
+            rules.ContentRulesOf(Symbol).Allows(Contents.Select(c => c.Symbol).ToArray(), rules) &&
+            Contents.All(c => c.FollowsContentRules(rules));
+
         /// <summary>This item and everything inside it, e.g. 3 for "C containing A and B".</summary>
         public int Size => 1 + Contents.Sum(c => c.Size);
 
@@ -127,8 +135,8 @@ namespace Bagels.Core
 
     /// <summary>
     /// Makes random orders from what is currently unlocked and priced (design.md, "Orders"): at most five items, a
-    /// reward of at most half the total item cost, bread nested no deeper than each bread's limit, and only contents
-    /// that can actually be built, i.e. that have an arrangement on their board that sets off no active formula.
+    /// reward of at most half the total item cost, bread nested no deeper than each bread's limit and filled only as
+    /// its <see cref="ContentRules"/> allow, and only contents that can actually be built, i.e. that have an arrangement on their board that sets off no active formula.
     /// </summary>
     public sealed class OrderGenerator
     {
@@ -190,14 +198,38 @@ namespace Bagels.Core
             if (layout == null || random.NextDouble() < 0.4) return new ItemSpec(info.Symbol);
 
             int levels = Math.Min(info.OrderLevels, budget ?? int.MaxValue);
-            var inner = levels >= 2 ? contentChoices : contentChoices.Where(c => rules.LayoutOf(c.Symbol) == null).ToList();
+            // What may sit at the next level down at all. This bread's own rules narrow its direct contents further,
+            // but bread inside it only follows its own rules.
+            var deeper = levels >= 2 ? contentChoices : contentChoices.Where(c => rules.LayoutOf(c.Symbol) == null).ToList();
+            var allowed = info.ContentRules;
+            var inner = deeper.Where(c => allowed.MayHold(c.Symbol, rules)).ToList();
             if (inner.Count == 0) return new ItemSpec(info.Symbol);
 
-            int count = 1 + random.Next(Math.Min(MaxContents, layout.SlotCount));
-            var contents = new ItemSpec[count];
-            for (int k = 0; k < count; k++) contents[k] = RandomItem(inner, inner, levels - 1, isActive);
-            var spec = new ItemSpec(info.Symbol, contents);
-            return CanBuild(spec, isActive) ? spec : new ItemSpec(info.Symbol);
+            var contents = new List<ItemSpec>();
+            if (allowed.AllowedSets.Count > 0)
+            {
+                // Only the listed topping sets, and only those whose every topping is available.
+                var sets = allowed.AllowedSets
+                    .Where(set => set.Count <= layout.SlotCount && set.All(s => inner.Any(c => c.Symbol == s))).ToList();
+                if (sets.Count == 0) return new ItemSpec(info.Symbol);
+                foreach (var s in sets[random.Next(sets.Count)])
+                    contents.Add(RandomItem(new List<PastryInfo> { inner.First(c => c.Symbol == s) }, deeper, levels - 1, isActive));
+            }
+            else
+            {
+                int count = 1 + random.Next(Math.Min(MaxContents, layout.SlotCount));
+                int limited = 0;
+                for (int k = 0; k < count; k++)
+                {
+                    var pool = limited < allowed.LimitedMax ? inner : inner.Where(c => !allowed.IsLimited(c.Symbol)).ToList();
+                    if (pool.Count == 0) break;
+                    var item = RandomItem(pool, deeper, levels - 1, isActive);
+                    if (allowed.IsLimited(item.Symbol)) limited++;
+                    contents.Add(item);
+                }
+            }
+            var spec = new ItemSpec(info.Symbol, contents.ToArray());
+            return spec.FollowsContentRules(rules) && CanBuild(spec, isActive) ? spec : new ItemSpec(info.Symbol);
         }
 
         /// <summary>
