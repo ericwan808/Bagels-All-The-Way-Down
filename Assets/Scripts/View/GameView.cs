@@ -203,6 +203,7 @@ namespace Bagels.View
             NewGame();
             if (panel == null) panel = GetComponentInChildren<SidePanel>(true);
             if (panel == null) panel = SidePanel.Create(this);
+            if (FindAnyObjectByType<BackgroundMusic>() == null) gameObject.AddComponent<BackgroundMusic>();
             if (Camera != null) FitCamera(SidePanel.ScreenFraction(Camera.aspect), SidePanel.RightScreenFraction(Camera.aspect));
         }
 
