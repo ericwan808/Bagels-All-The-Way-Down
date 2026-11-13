@@ -21,9 +21,13 @@ namespace Bagels.Core
     /// One playthrough: the board plus the economy from design.md (money, unlocks, orders) and undo. Pure logic; no
     /// Unity dependencies.
     /// <para>
-    /// Undo restores a snapshot taken before each of the player's last <see cref="MaxUndo"/> placements (As and
-    /// purchases), refunding purchases. Delivering to an order is final: it clears the undo history. Unlocks are
-    /// never taken back. Only unlocked formulas fire.
+    /// Undo restores a snapshot taken before each of the player's last <see cref="MaxUndo"/> placements (As,
+    /// purchases and components taken from stock), refunding purchases and returning stock. Delivering to an order is
+    /// final: it clears the undo history. Unlocks are never taken back. Only unlocked formulas fire.
+    /// </para>
+    /// <para>
+    /// Orders reward components and a tip in money, which extra toppings cut. Given components go to a stock;
+    /// placing a component uses a stocked one for free before buying one. Only money counts towards unlocks.
     /// </para>
     /// </summary>
     public sealed class GameSession
@@ -33,7 +37,9 @@ namespace Bagels.Core
         public const Symbol Basic = Symbol.A;
 
         readonly List<Order> orders = new List<Order>();
-        readonly List<(GameState state, int money)> undo = new List<(GameState, int)>();
+        readonly List<(GameState state, int money, Dictionary<Symbol, int> stock)> undo =
+            new List<(GameState, int, Dictionary<Symbol, int>)>();
+        Dictionary<Symbol, int> stock = new Dictionary<Symbol, int>();
         readonly OrderGenerator generator;
         bool finalOrderAdded;
 
@@ -74,27 +80,32 @@ namespace Bagels.Core
         public bool CanBuy(Symbol symbol) =>
             Progress.IsUnlocked(symbol) && Rules.PriceOf(symbol) is int price && Money >= price;
 
+        /// <summary>How many free copies of <paramref name="symbol"/> order rewards have put in stock.</summary>
+        public int StockOf(Symbol symbol) => stock.TryGetValue(symbol, out int n) ? n : 0;
+
+        /// <summary>True if the player can place <paramref name="symbol"/> now: the free A, a stocked copy, or one they can buy.</summary>
+        public bool CanTake(Symbol symbol) => symbol == Basic || StockOf(symbol) > 0 || CanBuy(symbol);
+
         public PlacementResult PlaceA(Board board, int slot) => Place(board, slot, Basic);
 
         /// <summary>
-        /// Places a component the player chose: the free A, or one they buy. Throws if the slot is not free or the
-        /// component can't be bought. A cascade that runs away leaves the board as it stopped, and rethrows.
+        /// Places a component the player chose: the free A, a copy from stock, or one they buy (stock is used first).
+        /// Throws if the slot is not free or the component can't be taken. A cascade that runs away leaves the board
+        /// as it stopped, and rethrows.
         /// </summary>
         public PlacementResult Place(Board board, int slot, Symbol symbol)
         {
             if (Won) throw new InvalidOperationException("The game is over.");
             if (!GameState.CanPlace(board, slot)) throw new InvalidOperationException("That slot is not free.");
-            int price = 0;
-            if (symbol != Basic)
-            {
-                if (!CanBuy(symbol)) throw new InvalidOperationException($"{symbol} can't be bought right now.");
-                price = Rules.PriceOf(symbol).Value;
-            }
+            if (!CanTake(symbol)) throw new InvalidOperationException($"{symbol} can't be bought right now.");
+            bool fromStock = symbol != Basic && StockOf(symbol) > 0;
+            int price = symbol == Basic || fromStock ? 0 : Rules.PriceOf(symbol).Value;
 
             // Snapshot a copy; the board objects passed in belong to the live state, which stays live.
-            undo.Add((State.Clone(), Money));
+            undo.Add((State.Clone(), Money, new Dictionary<Symbol, int>(stock)));
             if (undo.Count > MaxUndo) undo.RemoveAt(0);
             Money -= price;
+            if (fromStock) stock[symbol]--;
 
             try
             {
@@ -113,14 +124,15 @@ namespace Bagels.Core
             }
         }
 
-        /// <summary>Reverts the last placement and its cascade, refunding a purchase.</summary>
+        /// <summary>Reverts the last placement and its cascade, refunding a purchase or returning a copy to stock.</summary>
         public void Undo()
         {
             if (!CanUndo) throw new InvalidOperationException("Nothing to undo.");
-            var (state, money) = undo[undo.Count - 1];
+            var (state, money, stocked) = undo[undo.Count - 1];
             undo.RemoveAt(undo.Count - 1);
             State = state;
             Money = money;
+            stock = stocked;
             LastUnlocked = Array.Empty<PastryInfo>();
         }
 
@@ -133,18 +145,18 @@ namespace Bagels.Core
         {
             if (Won || order == null || !orders.Contains(order)) return DeliveryOutcome.Rejected;
             if (element == null || element == State.Root || !State.IsInPlay(element)) return DeliveryOutcome.Rejected;
-            int item = order.FindItemFor(element);
+            int item = order.FindItemFor(element, out int extras);
             if (item < 0) return DeliveryOutcome.Rejected;
 
             State.Remove(element);
-            order.Fill(item);
+            order.Fill(item, extras);
             undo.Clear(); // sales are final
             LastUnlocked = Array.Empty<PastryInfo>();
             if (!order.IsComplete) return DeliveryOutcome.Accepted;
 
-            Money += order.Reward;
-            int index = orders.IndexOf(order);
-            orders.RemoveAt(index);
+            Money += order.TipEarned;
+            foreach (var component in order.RewardComponents) stock[component] = StockOf(component) + 1;
+            orders.Remove(order);
             if (order.IsFinal)
             {
                 Won = true;
@@ -152,19 +164,18 @@ namespace Bagels.Core
             }
 
             RefreshUnlocks(); // the reward may unlock components, which new orders can then ask for
-            AddOrder(index);
+            // The orders below move up, and the replacement joins the bottom of the docket.
+            AddOrder();
             if (RegularOrderCount < MaxOrders) AddOrder();
             return DeliveryOutcome.Completed;
         }
 
         int RegularOrderCount => orders.Count(o => !o.IsFinal);
 
-        void AddOrder(int index = -1)
+        void AddOrder()
         {
             var order = generator.Generate(Progress, IsFormulaUnlocked);
-            if (order == null) return;
-            if (index < 0) orders.Add(order);
-            else orders.Insert(index, order);
+            if (order != null) orders.Add(order);
         }
 
         /// <summary>For tests: adds money (or, with 0, just re-checks unlocks) as if an order had paid it.</summary>
@@ -173,6 +184,12 @@ namespace Bagels.Core
             Money += amount;
             RefreshUnlocks();
         }
+
+        /// <summary>For tests: adds a hand-made order to the active ones.</summary>
+        internal void AddOrder(Order order) => orders.Insert(0, order);
+
+        /// <summary>For tests: adds copies of a component to stock, as if an order had given them.</summary>
+        internal void GrantStock(Symbol symbol, int count = 1) => stock[symbol] = StockOf(symbol) + count;
 
         void NoteCrafted(IEnumerable<CascadeStep> steps)
         {

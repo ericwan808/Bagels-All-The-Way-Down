@@ -6,9 +6,9 @@ using System.Text;
 namespace Bagels.Core
 {
     /// <summary>
-    /// One item an order asks for: a component, and for bread its exact contents (which may be bread with contents of
-    /// their own). Matching is strict: a bread must hold exactly the listed contents and nothing else. Positions on
-    /// the board don't matter. A bread with no listed contents must be empty.
+    /// One item an order asks for: a component, and for bread the contents it must hold (which may be bread with
+    /// contents of their own). A bread must hold every listed content, but may hold extra toppings too; each extra
+    /// makes the order imperfect and cuts its tip (see <see cref="Order"/>). Positions on the board don't matter.
     /// </summary>
     public sealed class ItemSpec
     {
@@ -21,26 +21,41 @@ namespace Bagels.Core
             Contents = contents ?? Array.Empty<ItemSpec>();
         }
 
-        public bool Matches(Element element)
+        /// <summary>True if <paramref name="element"/> satisfies this item, perfectly or with extra toppings.</summary>
+        public bool Matches(Element element) => ExtrasIn(element) != null;
+
+        /// <summary>
+        /// How many extra toppings <paramref name="element"/> holds beyond what this item lists, at any depth, or null
+        /// if it doesn't satisfy the item. Each extra counts once; what is inside an extra bread doesn't add to it.
+        /// When the listed contents could be matched in several ways, the way with the fewest extras counts.
+        /// </summary>
+        public int? ExtrasIn(Element element)
         {
-            if (element == null || element.Symbol != Symbol) return false;
+            if (element == null || element.Symbol != Symbol) return null;
             var children = element.Child != null ? element.Child.Elements.ToList() : new List<Element>();
-            if (children.Count != Contents.Count) return false;
-            return AssignContents(children, 0, new bool[children.Count]);
+            if (children.Count < Contents.Count) return null;
+            // Match each listed content against each child once, up front.
+            var fits = new int?[Contents.Count, children.Count];
+            for (int k = 0; k < Contents.Count; k++)
+                for (int i = 0; i < children.Count; i++)
+                    fits[k, i] = Contents[k].ExtrasIn(children[i]);
+            int best = int.MaxValue;
+            AssignContents(fits, 0, new bool[children.Count], children.Count - Contents.Count, ref best);
+            return best == int.MaxValue ? (int?)null : best;
         }
 
-        // Backtracking: each listed content needs its own child.
-        bool AssignContents(List<Element> children, int k, bool[] used)
+        // Backtracking: each listed content needs its own child; unmatched children are extras.
+        void AssignContents(int?[,] fits, int k, bool[] used, int extras, ref int best)
         {
-            if (k == Contents.Count) return true;
-            for (int i = 0; i < children.Count; i++)
+            if (extras >= best) return;
+            if (k == Contents.Count) { best = extras; return; }
+            for (int i = 0; i < used.Length; i++)
             {
-                if (used[i] || !Contents[k].Matches(children[i])) continue;
+                if (used[i] || !(fits[k, i] is int inner)) continue;
                 used[i] = true;
-                if (AssignContents(children, k + 1, used)) return true;
+                AssignContents(fits, k + 1, used, extras + inner, ref best);
                 used[i] = false;
             }
-            return false;
         }
 
         /// <summary>What buying this item and everything in it would cost. Unpriced components count as 0.</summary>
@@ -70,11 +85,17 @@ namespace Bagels.Core
 
         /// <summary>
         /// True if every bread in this item holds only what its <see cref="ContentRules"/> allow, e.g. a C holds one of
-        /// its listed topping sets.
+        /// its listed topping sets, and an E holds at most one G or I anywhere inside it.
         /// </summary>
         public bool FollowsContentRules(Rules rules) =>
-            rules.ContentRulesOf(Symbol).Allows(Contents.Select(c => c.Symbol).ToArray(), rules) &&
+            rules.ContentRulesOf(Symbol).Allows(Contents.Select(c => c.Symbol).ToArray(), Inside(), rules) &&
             Contents.All(c => c.FollowsContentRules(rules));
+
+        /// <summary>Every component inside this item, at any depth (not the item itself).</summary>
+        public IEnumerable<Symbol> Inside() => Contents.SelectMany(c => c.Everything());
+
+        /// <summary>This item and every component inside it.</summary>
+        public IEnumerable<Symbol> Everything() => Inside().Prepend(Symbol);
 
         /// <summary>This item and everything inside it, e.g. 3 for "C containing A and B".</summary>
         public int Size => 1 + Contents.Sum(c => c.Size);
@@ -89,54 +110,121 @@ namespace Bagels.Core
     }
 
     /// <summary>
-    /// A request for up to <see cref="MaxItems"/> items, paying <see cref="Reward"/> once every item has been handed
-    /// in. Items can be handed in one at a time.
+    /// A request for up to <see cref="MaxItems"/> items. Once every item has been handed in (one at a time), it gives
+    /// the components in <see cref="RewardComponents"/> and a tip in money. A perfect order earns the full
+    /// <see cref="Tip"/>; each extra topping handed in makes it imperfect and cuts the tip (<see cref="TipAfter"/>).
+    /// The components are given either way.
     /// </summary>
     public sealed class Order
     {
         public const int MaxItems = 5;
+        /// <summary>At this many imperfections the tip is gone.</summary>
+        public const int ImperfectionsToLoseTip = 5;
+        /// <summary>The share of the tip left after the first imperfection; it falls evenly from there to nothing.</summary>
+        public const double TipAfterFirstImperfection = 0.2;
 
         readonly bool[] filled;
 
         public int Id { get; }
         public IReadOnlyList<ItemSpec> Items { get; }
+
+        /// <summary>The reward's total value for a perfect order: the tip plus the price of each component given.</summary>
         public int Reward { get; }
+
+        /// <summary>The tip a perfect order earns.</summary>
+        public int Tip { get; }
+
+        /// <summary>Components given to the player's stock, each worth its price (bread comes empty).</summary>
+        public IReadOnlyList<Symbol> RewardComponents { get; }
+
+        /// <summary>Extra toppings handed in so far, over all filled items.</summary>
+        public int Imperfections { get; private set; }
+
+        /// <summary>The tip this order earns with the imperfections so far.</summary>
+        public int TipEarned => TipAfter(Imperfections);
 
         /// <summary>The special order for the target bagel; fulfilling it wins the game.</summary>
         public bool IsFinal { get; }
 
+        /// <summary>An order whose whole reward is the tip.</summary>
         public Order(int id, IEnumerable<ItemSpec> items, int reward, bool isFinal = false)
+            : this(id, items, reward, null, reward, isFinal) { }
+
+        /// <summary>An order worth <paramref name="reward"/> in all: <paramref name="components"/> plus a perfect tip of <paramref name="tip"/>.</summary>
+        public Order(int id, IEnumerable<ItemSpec> items, int reward, IEnumerable<Symbol> components, int tip, bool isFinal = false)
         {
             Id = id;
             Items = items.ToArray();
             if (Items.Count == 0 || Items.Count > MaxItems)
                 throw new ArgumentException($"An order needs 1 to {MaxItems} items.");
+            if (tip < 0 || tip > reward) throw new ArgumentException("The tip must be between 0 and the reward.");
             Reward = reward;
+            Tip = tip;
+            RewardComponents = (components ?? Enumerable.Empty<Symbol>()).ToArray();
             IsFinal = isFinal;
             filled = new bool[Items.Count];
+        }
+
+        /// <summary>
+        /// The tip after <paramref name="imperfections"/> extra toppings: all of it for none, 20% for one, then
+        /// evenly down to nothing at <see cref="ImperfectionsToLoseTip"/>.
+        /// </summary>
+        public int TipAfter(int imperfections)
+        {
+            if (imperfections <= 0) return Tip;
+            if (imperfections >= ImperfectionsToLoseTip) return 0;
+            double share = TipAfterFirstImperfection * (ImperfectionsToLoseTip - imperfections) / (ImperfectionsToLoseTip - 1);
+            return (int)Math.Round(Tip * share);
+        }
+
+        /// <summary>
+        /// The reward as the player sees it, e.g. "C + tip" or "tip": the components, and whether there is a tip, but
+        /// not how much (the player only finds that out on completing the order).
+        /// </summary>
+        public string RewardText()
+        {
+            var parts = RewardComponents.GroupBy(s => s).OrderByDescending(g => g.Key)
+                                        .Select(g => g.Count() > 1 ? $"{g.Count()}×{g.Key}" : g.Key.ToString()).ToList();
+            if (Tip > 0 || parts.Count == 0) parts.Add("tip");
+            return string.Join(" + ", parts);
         }
 
         public bool IsFilled(int item) => filled[item];
         public bool IsComplete => filled.All(f => f);
 
-        /// <summary>The first unfilled item <paramref name="element"/> satisfies, or -1.</summary>
-        public int FindItemFor(Element element)
+        /// <summary>
+        /// The unfilled item <paramref name="element"/> satisfies with the fewest extra toppings (the first such item),
+        /// or -1. <paramref name="extras"/> is how many extras it holds for that item.
+        /// </summary>
+        public int FindItemFor(Element element, out int extras)
         {
+            int best = -1;
+            extras = 0;
             for (int i = 0; i < Items.Count; i++)
-                if (!filled[i] && Items[i].Matches(element)) return i;
-            return -1;
+            {
+                if (filled[i] || !(Items[i].ExtrasIn(element) is int n)) continue;
+                if (best < 0 || n < extras) { best = i; extras = n; }
+            }
+            return best;
         }
 
-        internal void Fill(int item) => filled[item] = true;
+        public int FindItemFor(Element element) => FindItemFor(element, out _);
+
+        internal void Fill(int item, int extras = 0)
+        {
+            filled[item] = true;
+            Imperfections += extras;
+        }
 
         public override string ToString() =>
-            $"Order {Id}: {string.Join(" + ", Items)} for ${Reward}{(IsFinal ? " (final)" : "")}";
+            $"Order {Id}: {string.Join(" + ", Items)} for {RewardText()} (tip ${Tip}){(IsFinal ? " (final)" : "")}";
     }
 
     /// <summary>
     /// Makes random orders from what is currently unlocked and priced (design.md, "Orders"): at most five items, a
-    /// reward of at most half the total item cost, bread nested no deeper than each bread's limit and filled only as
+    /// reward worth about two thirds of the total item cost (components plus a tip), bread nested no deeper than each bread's limit and filled only as
     /// its <see cref="ContentRules"/> allow, and only contents that can actually be built, i.e. that have an arrangement on their board that sets off no active formula.
+    /// Components are picked by how recently they were unlocked, and one layer holds only a few high-level components.
     /// </summary>
     public sealed class OrderGenerator
     {
@@ -144,9 +232,55 @@ namespace Bagels.Core
         const int Attempts = 40;
         const int ArrangementTries = 24;
 
+        /// <summary>This many of the most recently unlocked components are picked at full weight.</summary>
+        public const int FullWeightCount = 3;
+        /// <summary>Each step further back in the unlock order multiplies the weight by this.</summary>
+        public const double WeightFalloff = 0.5;
+        /// <summary>No component's weight drops below this, so older ones still turn up now and then.</summary>
+        public const double MinWeight = 0.05;
+        /// <summary>One layer (an order's items, or one bread's direct contents) usually holds at most this many high-level components...</summary>
+        public const int UsualHighLevelPerLayer = 2;
+        /// <summary>...and never more than this.</summary>
+        public const int MaxHighLevelPerLayer = 3;
+        /// <summary>Once a layer has its usual number of high-level components, the chance it may still take one more.</summary>
+        const double ExtraHighLevelChance = 0.25;
+
+        /// <summary>A reward never gives any of this many most recently unlocked components.</summary>
+        public const int RecentNotGiven = 2;
+        /// <summary>A reward gives at most this many components.</summary>
+        public const int MaxRewardComponents = 5;
+        /// <summary>A reward is worth about this share of the order's cost...</summary>
+        public const double RewardShare = 2.0 / 3.0;
+        /// <summary>...give or take this much of the cost.</summary>
+        public const double RewardJitter = 0.05;
+        /// <summary>The components aim to be worth about this share of the reward; the tip is the rest...</summary>
+        public const double ComponentShare = 0.5;
+        /// <summary>...and are never worth more than this share of it.</summary>
+        public const double MaxComponentShare = 0.6;
+        /// <summary>Components stop being added once they reach this share of their target.</summary>
+        const double CloseEnough = 0.8;
+        /// <summary>
+        /// Among the components that still fit, the most valuable is picked at full weight and each cheaper one at
+        /// this times the weight of the one above it.
+        /// </summary>
+        const double RewardWeightFalloff = 0.5;
+
         readonly Rules rules;
         readonly Random random;
+        readonly Dictionary<Symbol, double> weights = new Dictionary<Symbol, double>();
         int nextId = 1;
+
+        /// <summary>
+        /// A limit from an enclosing bread that counts everything inside it (e.g. an E's "at most one G or I"), with
+        /// how many limited components it still has room for.
+        /// </summary>
+        readonly struct Cap
+        {
+            public readonly ContentRules Rules;
+            public readonly int Left;
+            public Cap(ContentRules rules, int left) { Rules = rules; Left = left; }
+            public Cap Minus(int n) => new Cap(Rules, Left - n);
+        }
 
         public OrderGenerator(Rules rules, int seed)
         {
@@ -165,66 +299,174 @@ namespace Bagels.Core
             var items = available.Where(i => i.Price > 0).ToList();
             if (items.Count == 0) return null; // nothing for sale yet, so nothing to order
 
+            weights.Clear();
+            for (int i = 0; i < available.Count; i++)
+                weights[available[i].Symbol] = RecencyWeight(available.Count - 1 - i);
+
             for (int attempt = 0; attempt < Attempts; attempt++)
             {
                 int maxItems = Math.Min(Order.MaxItems, 1 + items.Count / 2);
                 int count = 1 + random.Next(maxItems);
                 var specs = new List<ItemSpec>();
-                for (int k = 0; k < count; k++) specs.Add(RandomItem(items, available, null, isActive));
+                int high = 0;
+                for (int k = 0; k < count; k++)
+                {
+                    var pool = LayerPool(items, high);
+                    if (pool.Count == 0) break;
+                    var spec = RandomItem(pool, available, null, Array.Empty<Cap>(), isActive);
+                    if (rules.IsHighLevel(spec.Symbol)) high++;
+                    specs.Add(spec);
+                }
                 int cost = specs.Sum(s => s.Cost(rules));
                 if (cost <= 0) continue;
-                return new Order(nextId++, specs, Reward(cost));
+                return MakeOrder(specs, cost, items);
             }
             var cheapest = items.OrderBy(i => i.Price).First();
-            return new Order(nextId++, new[] { new ItemSpec(cheapest.Symbol) }, Reward(cheapest.Price.Value));
+            return MakeOrder(new[] { new ItemSpec(cheapest.Symbol) }, cheapest.Price.Value, items);
         }
 
-        /// <summary>Between 30% and 50% of the cost: the design caps the reward at half the cost.</summary>
+        Order MakeOrder(IReadOnlyList<ItemSpec> specs, int cost, List<PastryInfo> forSale)
+        {
+            int reward = Reward(cost);
+            var components = RewardComponents(reward, forSale);
+            int tip = reward - components.Sum(s => rules.PriceOf(s).Value);
+            return new Order(nextId++, specs, reward, components, tip);
+        }
+
+        /// <summary>
+        /// The components a reward worth <paramref name="value"/> gives (design.md, "Orders"); the tip is the rest.
+        /// They aim for <see cref="ComponentShare"/> of the value, never above <see cref="MaxComponentShare"/>.
+        /// Components come from <paramref name="forSale"/> (unlocked, priced, not A, in unlock order) minus the
+        /// <see cref="RecentNotGiven"/> newest. Each pick favours the most valuable component that still fits, so
+        /// rewards shift to better components as the player progresses, with some randomness. Early on, when nothing
+        /// can be given, the whole reward is the tip.
+        /// </summary>
+        List<Symbol> RewardComponents(int value, List<PastryInfo> forSale)
+        {
+            var giveable = forSale.Take(Math.Max(0, forSale.Count - RecentNotGiven)).ToList();
+            double target = value * ComponentShare;
+            int cap = (int)Math.Floor(value * MaxComponentShare);
+            var components = new List<Symbol>();
+            int given = 0;
+            while (components.Count < MaxRewardComponents && given < target * CloseEnough)
+            {
+                var fits = giveable.Where(i => given + i.Price <= cap).OrderByDescending(i => i.Price).ToList();
+                if (fits.Count == 0) break;
+                var weight = new Dictionary<PastryInfo, double>();
+                for (int k = 0; k < fits.Count; k++) weight[fits[k]] = Math.Pow(RewardWeightFalloff, k);
+                var pick = Pick(fits, i => weight[i]);
+                components.Add(pick.Symbol);
+                given += pick.Price.Value;
+            }
+            return components;
+        }
+
+        /// <summary>The reward's total value: about <see cref="RewardShare"/> of the cost, give or take <see cref="RewardJitter"/>.</summary>
         int Reward(int cost)
         {
-            int cap = cost / 2;
-            int reward = (int)Math.Round(cost * (0.3 + random.NextDouble() * 0.2));
-            return Math.Max(1, Math.Min(cap, reward));
+            double share = RewardShare + (random.NextDouble() * 2 - 1) * RewardJitter;
+            return Math.Max(1, (int)Math.Round(cost * share));
+        }
+
+        /// <summary>
+        /// How likely a component is to be picked, relative to the newest: <paramref name="stepsBack"/> is how many
+        /// components were unlocked after it (0 for the newest). The newest <see cref="FullWeightCount"/> get full
+        /// weight, each step further back halves it, and it never drops below <see cref="MinWeight"/>.
+        /// </summary>
+        public static double RecencyWeight(int stepsBack) =>
+            stepsBack < FullWeightCount ? 1.0
+                : Math.Max(MinWeight, Math.Pow(WeightFalloff, stepsBack - FullWeightCount + 1));
+
+        double Weight(Symbol symbol) => weights.TryGetValue(symbol, out double w) ? w : 1.0;
+
+        T Pick<T>(IReadOnlyList<T> list, Func<T, double> weight)
+        {
+            double total = list.Sum(weight);
+            double r = random.NextDouble() * total;
+            foreach (var x in list)
+            {
+                r -= weight(x);
+                if (r < 0) return x;
+            }
+            return list[list.Count - 1];
+        }
+
+        /// <summary>
+        /// What may still go in a layer that already holds <paramref name="high"/> high-level components: past
+        /// <see cref="UsualHighLevelPerLayer"/> another one is only sometimes allowed, and past
+        /// <see cref="MaxHighLevelPerLayer"/> never.
+        /// </summary>
+        List<PastryInfo> LayerPool(List<PastryInfo> pool, int high)
+        {
+            bool allowHigh = high < UsualHighLevelPerLayer ||
+                             (high < MaxHighLevelPerLayer && random.NextDouble() < ExtraHighLevelChance);
+            return allowHigh ? pool : pool.Where(c => !c.HighLevel).ToList();
+        }
+
+        /// <summary>True if one more <paramref name="symbol"/> fits within every enclosing bread's limits.</summary>
+        bool MayAdd(Symbol symbol, IReadOnlyList<Cap> caps) =>
+            caps.All(c => c.Rules.MayHold(symbol, rules) && (!c.Rules.IsLimited(symbol) || c.Left > 0));
+
+        /// <summary>Uses up room in each limit for everything in <paramref name="item"/>.</summary>
+        static void Use(List<Cap> caps, ItemSpec item)
+        {
+            for (int i = 0; i < caps.Count; i++)
+                caps[i] = caps[i].Minus(item.Everything().Count(caps[i].Rules.IsLimited));
         }
 
         /// <summary>
         /// A random item. <paramref name="budget"/> is how many content levels the parent leaves (null at the top);
         /// a bread may fill min(its own limit, budget) levels, and with one level left its contents are bagels only.
+        /// <paramref name="caps"/> are the limits of enclosing breads that count everything inside them; the caller
+        /// has checked that the item itself fits them.
         /// </summary>
-        ItemSpec RandomItem(List<PastryInfo> choices, List<PastryInfo> contentChoices, int? budget, Func<Symbol, bool> isActive)
+        ItemSpec RandomItem(List<PastryInfo> choices, List<PastryInfo> contentChoices, int? budget, IReadOnlyList<Cap> caps,
+                            Func<Symbol, bool> isActive)
         {
-            var info = choices[random.Next(choices.Count)];
+            var info = Pick(choices, c => Weight(c.Symbol));
             var layout = rules.LayoutOf(info.Symbol);
             if (layout == null || random.NextDouble() < 0.4) return new ItemSpec(info.Symbol);
 
             int levels = Math.Min(info.OrderLevels, budget ?? int.MaxValue);
-            // What may sit at the next level down at all. This bread's own rules narrow its direct contents further,
-            // but bread inside it only follows its own rules.
+            // What may sit at the next level down at all, before any content rules.
             var deeper = levels >= 2 ? contentChoices : contentChoices.Where(c => rules.LayoutOf(c.Symbol) == null).ToList();
             var allowed = info.ContentRules;
-            var inner = deeper.Where(c => allowed.MayHold(c.Symbol, rules)).ToList();
+            // The limits on everything inside this bread: the enclosing ones (minus the room this bread itself takes)
+            // and its own.
+            var inside = caps.Select(c => c.Rules.IsLimited(info.Symbol) ? c.Minus(1) : c).ToList();
+            if (allowed.Limited.Count > 0 || allowed.Highest != null) inside.Add(new Cap(allowed, allowed.LimitedMax));
+            var inner = deeper.Where(c => MayAdd(c.Symbol, inside)).ToList();
             if (inner.Count == 0) return new ItemSpec(info.Symbol);
 
             var contents = new List<ItemSpec>();
             if (allowed.AllowedSets.Count > 0)
             {
-                // Only the listed topping sets, and only those whose every topping is available.
-                var sets = allowed.AllowedSets
-                    .Where(set => set.Count <= layout.SlotCount && set.All(s => inner.Any(c => c.Symbol == s))).ToList();
+                // Only the listed topping sets whose every topping is available and fits the limits. A set is as
+                // likely as its newest topping.
+                var sets = allowed.AllowedSets.Where(set =>
+                    set.Count <= layout.SlotCount &&
+                    set.All(s => inner.Any(c => c.Symbol == s)) &&
+                    set.Count(rules.IsHighLevel) <= MaxHighLevelPerLayer &&
+                    inside.All(c => set.Count(c.Rules.IsLimited) <= c.Left)).ToList();
                 if (sets.Count == 0) return new ItemSpec(info.Symbol);
-                foreach (var s in sets[random.Next(sets.Count)])
-                    contents.Add(RandomItem(new List<PastryInfo> { inner.First(c => c.Symbol == s) }, deeper, levels - 1, isActive));
+                foreach (var s in Pick(sets, set => set.Max(Weight)))
+                {
+                    var item = RandomItem(new List<PastryInfo> { inner.First(c => c.Symbol == s) }, deeper, levels - 1, inside, isActive);
+                    Use(inside, item);
+                    contents.Add(item);
+                }
             }
             else
             {
                 int count = 1 + random.Next(Math.Min(MaxContents, layout.SlotCount));
-                int limited = 0;
+                int high = 0;
                 for (int k = 0; k < count; k++)
                 {
-                    var pool = limited < allowed.LimitedMax ? inner : inner.Where(c => !allowed.IsLimited(c.Symbol)).ToList();
+                    var pool = LayerPool(inner.Where(c => MayAdd(c.Symbol, inside)).ToList(), high);
                     if (pool.Count == 0) break;
-                    var item = RandomItem(pool, deeper, levels - 1, isActive);
-                    if (allowed.IsLimited(item.Symbol)) limited++;
+                    var item = RandomItem(pool, deeper, levels - 1, inside, isActive);
+                    Use(inside, item);
+                    if (rules.IsHighLevel(item.Symbol)) high++;
                     contents.Add(item);
                 }
             }

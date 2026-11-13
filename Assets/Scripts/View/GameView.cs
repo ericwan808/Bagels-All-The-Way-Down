@@ -271,7 +271,7 @@ namespace Bagels.View
 
         public void Place(Board board, int slot) => Place(board, slot, GameSession.Basic);
 
-        /// <summary>Places a free A, or buys and places another component.</summary>
+        /// <summary>Places a free A, a stocked component, or buys and places another one.</summary>
         public void Place(Board board, int slot, Symbol symbol)
         {
             if (IsZooming || session == null || session.Won || !GameState.CanPlace(board, slot)) return;
@@ -307,7 +307,7 @@ namespace Bagels.View
         {
             if (session == null) return "The game hasn't started.";
             if (session.Won) return "The game is won.";
-            if (symbol == GameSession.Basic || session.CanBuy(symbol)) return null;
+            if (session.CanTake(symbol)) return null;
             var info = rules.InfoOf(symbol);
             if (info == null || info.Price == null) return $"{symbol} can only be crafted.";
             if (!session.Progress.IsUnlocked(symbol)) return $"{symbol} is not unlocked yet.";
@@ -321,17 +321,25 @@ namespace Bagels.View
         public DeliveryOutcome Deliver(Order order, Element element)
         {
             if (session == null || IsZooming) return DeliveryOutcome.Rejected;
+            int imperfectBefore = order?.Imperfections ?? 0;
             var outcome = session.Deliver(order, element);
+            int extras = (order?.Imperfections ?? 0) - imperfectBefore;
+            string extraNote = extras == 0 ? "" : $" It had {extras} extra topping{(extras == 1 ? "" : "s")}.";
             switch (outcome)
             {
                 case DeliveryOutcome.Rejected:
                     Say($"Order #{order?.Id} doesn't need that {Describe(element)}.");
                     return outcome;
                 case DeliveryOutcome.Accepted:
-                    Message = $"Handed in {Describe(element)}.";
+                    Message = $"Handed in {Describe(element)}." + extraNote;
                     break;
                 case DeliveryOutcome.Completed:
-                    Message = $"Order #{order.Id} complete: +${order.Reward}." + Prefix(" ", Unlocked());
+                    // The tip shows only as the customer's reaction and the floating amount, not in the status text.
+                    string given = order.RewardComponents.Count > 0
+                        ? " Got " + string.Join(", ", order.RewardComponents) + "." : "";
+                    Message = $"Order #{order.Id} complete." + given + Prefix(" ", Unlocked());
+                    if (panel != null)
+                        panel.ShowCustomerResponse(Responses.Pick(order.Imperfections, responseRandom), order.TipEarned);
                     break;
                 case DeliveryOutcome.Won:
                     Message = null;
@@ -342,6 +350,33 @@ namespace Bagels.View
             Redraw();
             Changed?.Invoke();
             return outcome;
+        }
+
+        /// <summary>The Resources text file holding what customers say on completing an order.</summary>
+        public const string ResponsesResource = "CustomerResponses";
+
+        CustomerResponses responses;
+        readonly System.Random responseRandom = new System.Random();
+
+        /// <summary>Customer lines from Assets/Resources/CustomerResponses.txt, read once.</summary>
+        CustomerResponses Responses
+        {
+            get
+            {
+                if (responses != null) return responses;
+                var file = Resources.Load<TextAsset>(ResponsesResource);
+                try
+                {
+                    responses = file != null ? CustomerResponses.Parse(file.text) : CustomerResponses.None;
+                }
+                catch (FormatException e)
+                {
+                    Debug.LogError($"Bagels: {ResponsesResource}.txt: {e.Message}", file);
+                    responses = CustomerResponses.None;
+                }
+                if (file == null) Debug.LogWarning($"Bagels: no Resources/{ResponsesResource}.txt; customers will say nothing.");
+                return responses;
+            }
         }
 
         string Describe(Element element) =>

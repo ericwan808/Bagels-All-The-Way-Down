@@ -22,3 +22,4 @@ MonoBehaviour:
   unlockedAtStart: 0
   unlocksWithPrevious: 0
   orderLevels: 1
+  highLevel: 1

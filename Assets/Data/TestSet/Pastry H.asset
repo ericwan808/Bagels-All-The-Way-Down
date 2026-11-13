@@ -22,6 +22,7 @@ MonoBehaviour:
   unlockedAtStart: 0
   unlocksWithPrevious: 0
   orderLevels: 3
+  highLevel: 1
   allowedContents: []
   limitedContents: JK
   maxLimitedContents: 1
