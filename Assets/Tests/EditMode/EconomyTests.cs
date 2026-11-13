@@ -78,42 +78,64 @@ namespace Bagels.Core.Tests
         }
 
         [Test]
-        public void Unlocks_FollowMoneyInListOrder_FWithE()
+        public void Formulas_AreBoughtInListOrder_ForTheirComponentsPrice_FWithE()
         {
+            Assert.AreEqual(20, session.Progress.NextFormulaPrice, "D's formula costs what a D costs");
             session.GrantMoney(19);
-            Assert.IsFalse(session.Progress.IsUnlocked(Symbol.D));
+            Assert.IsFalse(session.CanBuyNextFormula);
+            Assert.Throws<InvalidOperationException>(() => session.BuyNextFormula());
             session.GrantMoney(1);
+            Assert.IsFalse(session.Progress.IsUnlocked(Symbol.D), "money alone doesn't unlock it");
+            Assert.IsTrue(session.CanBuyNextFormula);
+            session.BuyNextFormula();
             Assert.IsTrue(session.Progress.IsUnlocked(Symbol.D));
+            Assert.AreEqual(0, session.Money);
             CollectionAssert.AreEqual(new[] { Symbol.D }, session.LastUnlocked.Select(i => i.Symbol));
 
-            session.GrantMoney(29); // $49: E costs 50; F (30) waits for E even though it is cheaper
-            Assert.IsFalse(session.Progress.IsUnlocked(Symbol.E));
-            Assert.IsFalse(session.Progress.IsUnlocked(Symbol.F));
+            session.GrantMoney(49); // E costs 50; F (30) comes with E
+            Assert.AreEqual(50, session.Progress.NextFormulaPrice);
+            Assert.IsFalse(session.CanBuyNextFormula);
             session.GrantMoney(1);
+            session.BuyNextFormula();
             CollectionAssert.AreEqual(new[] { Symbol.E, Symbol.F }, session.LastUnlocked.Select(i => i.Symbol));
+            Assert.AreEqual(0, session.Money);
         }
 
         [Test]
-        public void Unlocks_OneJumpCanUnlockSeveral_ButPricelessOnesNeedCrafting()
+        public void BuyingFormulas_StopsAtPricelessOnes_WhichNeedCrafting()
         {
-            session.GrantMoney(10000);
+            session.GrantMoney(100000);
+            while (session.CanBuyNextFormula) session.BuyNextFormula();
             Assert.IsTrue(session.Progress.IsUnlocked(Symbol.J));
             Assert.IsFalse(session.Progress.IsUnlocked(Symbol.K), "K unlocks only when a J is crafted");
             Assert.AreEqual(Symbol.K, session.Progress.NextLocked.Symbol);
+            Assert.IsNull(session.Progress.NextFormulaPrice, "K's formula can't be bought");
+        }
+
+        [Test]
+        public void BuyingAFormula_IsNotTakenBackByUndo_NorRefunded()
+        {
+            session.GrantMoney(25);
+            session.Place(root, 0, Symbol.B); // $5
+            session.BuyNextFormula();         // D, $20
+            Assert.AreEqual(0, session.Money);
+            session.Undo();
+            Assert.AreEqual(5, session.Money, "undo refunds the B only");
+            Assert.IsTrue(session.Progress.IsUnlocked(Symbol.D));
         }
 
         [Test]
         public void Progression_KAfterJCrafted_LAfterKCrafted()
         {
             var progress = new Progression(FullRules().Catalog);
-            progress.Update(10000);
+            progress.UnlockUpTo(10000);
             Assert.IsFalse(progress.IsUnlocked(Symbol.K));
             progress.NoteCrafted(Symbol.J);
-            progress.Update(0); // money doesn't matter any more; unlocks stay
+            progress.Update();
             Assert.IsTrue(progress.IsUnlocked(Symbol.K));
             Assert.IsFalse(progress.IsUnlocked(Symbol.L));
             progress.NoteCrafted(Symbol.K);
-            progress.Update(0);
+            progress.Update();
             Assert.IsTrue(progress.IsUnlocked(Symbol.L));
             Assert.IsNull(progress.NextLocked);
         }
@@ -134,6 +156,7 @@ namespace Bagels.Core.Tests
         public void UnlockedFormula_Fires()
         {
             session.GrantMoney(20);
+            session.BuyNextFormula();
             session.PlaceA(root, 1);
             session.PlaceA(root, 2);
             session.PlaceA(root, 3);
@@ -149,6 +172,7 @@ namespace Bagels.Core.Tests
             Assert.IsFalse(session.CanBuy(Symbol.B), "no money yet");
             Assert.Throws<InvalidOperationException>(() => session.Place(root, 0, Symbol.B));
             session.GrantMoney(10000);
+            session.UnlockUpTo(10000);
             Assert.IsTrue(session.CanBuy(Symbol.J));
             Assert.IsFalse(session.CanBuy(Symbol.K));
             session.Progress.NoteCrafted(Symbol.J);
@@ -175,6 +199,7 @@ namespace Bagels.Core.Tests
         public void BuyingACraftedComponent_DoesNotCountAsCrafting()
         {
             session.GrantMoney(10000);
+            session.UnlockUpTo(10000);
             session.Place(root, 0, Symbol.J);
             Assert.IsFalse(session.Progress.IsUnlocked(Symbol.K));
         }
@@ -204,6 +229,7 @@ namespace Bagels.Core.Tests
         public void Undo_GoesBackAtMostTenPlacements()
         {
             session.GrantMoney(100000);
+            session.UnlockUpTo(100000);
             int start = session.Money;
             session.Place(root, 0, Symbol.H);
             var h = root[0].Child;
@@ -277,10 +303,10 @@ namespace Bagels.Core.Tests
         }
 
         [Test]
-        public void Tip_FullWhenPerfect_TwentyPercentAfterOneExtra_GoneAtFive()
+        public void Tip_FullWhenPerfect_SixtyPercentAfterOneExtra_GoneAtFive()
         {
             var order = new Order(1, new[] { new ItemSpec(Symbol.B) }, 100, null, 100);
-            CollectionAssert.AreEqual(new[] { 100, 20, 15, 10, 5, 0, 0 }, Enumerable.Range(0, 7).Select(order.TipAfter));
+            CollectionAssert.AreEqual(new[] { 100, 60, 30, 10, 5, 0, 0 }, Enumerable.Range(0, 7).Select(order.TipAfter));
         }
 
         [Test]
@@ -295,7 +321,7 @@ namespace Bagels.Core.Tests
             session.State.PutWithoutCascade(c.Child, 1, Symbol.B); // one extra
             Assert.AreEqual(DeliveryOutcome.Completed, session.Deliver(order, c));
             Assert.AreEqual(1, order.Imperfections);
-            Assert.AreEqual(11, session.Money, "20% of the $55 tip");
+            Assert.AreEqual(33, session.Money, "60% of the $55 tip");
             Assert.AreEqual(1, session.StockOf(Symbol.B), "the components are given anyway");
         }
 
@@ -375,7 +401,7 @@ namespace Bagels.Core.Tests
             foreach (int money in new[] { 0, 20, 50, 100, 400 })
             {
                 var progress = new Progression(rules.Catalog);
-                progress.Update(money);
+                progress.UnlockUpTo(money);
                 var generator = new OrderGenerator(rules, seed: money);
                 for (int n = 0; n < 150; n++)
                 {
@@ -388,7 +414,7 @@ namespace Bagels.Core.Tests
                     Assert.GreaterOrEqual(order.Reward, 1);
                     Assert.That(order.Reward, Is.InRange(cost * (OrderGenerator.RewardShare - OrderGenerator.RewardJitter) - 0.5,
                                                          cost * (OrderGenerator.RewardShare + OrderGenerator.RewardJitter) + 0.5),
-                                $"reward {order.Reward} is not about two thirds of {cost}: {order}");
+                                $"reward {order.Reward} is not about the cost {cost}: {order}");
                     foreach (var item in order.Items)
                     {
                         Assert.IsTrue(item.WithinNestingLimits(rules), $"{item} nests too deep");
@@ -474,7 +500,7 @@ namespace Bagels.Core.Tests
             foreach (int money in new[] { 0, 20, 50, 100, 400 })
             {
                 var progress = new Progression(rules.Catalog);
-                progress.Update(money);
+                progress.UnlockUpTo(money);
                 var forSale = rules.Catalog.Where(i => i.Price > 0 && progress.IsUnlocked(i.Symbol)).ToList();
                 var newest = forSale.Skip(forSale.Count - OrderGenerator.RecentNotGiven).Select(i => i.Symbol).ToList();
                 var generator = new OrderGenerator(rules, seed: money);
@@ -503,7 +529,7 @@ namespace Bagels.Core.Tests
             double AverageComponentPrice(int money)
             {
                 var progress = new Progression(rules.Catalog);
-                progress.Update(money);
+                progress.UnlockUpTo(money);
                 var generator = new OrderGenerator(rules, seed: 3);
                 var prices = new List<int>();
                 for (int n = 0; n < 300; n++)
@@ -540,7 +566,7 @@ namespace Bagels.Core.Tests
         {
             session.GrantStock(Symbol.C, 10); // worth $150
             session.GrantMoney(0);
-            Assert.IsFalse(session.Progress.IsUnlocked(Symbol.D), "only money unlocks formulas");
+            Assert.IsFalse(session.Progress.IsUnlocked(Symbol.D), "stock can't buy formulas");
             Assert.IsFalse(session.CanBuy(Symbol.C));
             Assert.IsTrue(session.CanTake(Symbol.C));
             session.Place(root, 0, Symbol.C);
@@ -604,7 +630,7 @@ namespace Bagels.Core.Tests
         {
             var rules = FullRules();
             var progress = new Progression(rules.Catalog);
-            progress.Update(400);
+            progress.UnlockUpTo(400);
             var generator = new OrderGenerator(rules, seed: 11);
             double components = 0, total = 0;
             for (int n = 0; n < 300; n++)
@@ -622,7 +648,7 @@ namespace Bagels.Core.Tests
         {
             var rules = FullRules();
             var progress = new Progression(rules.Catalog);
-            progress.Update(400); // everything up to J
+            progress.UnlockUpTo(400); // everything up to J
             var generator = new OrderGenerator(rules, seed: 7);
             var counts = new Dictionary<Symbol, int>();
             foreach (Symbol s in Enum.GetValues(typeof(Symbol))) counts[s] = 0;
@@ -675,6 +701,7 @@ namespace Bagels.Core.Tests
         public void FinalOrder_AppearsWhenLUnlocks_AndWinsTheGame()
         {
             session.GrantMoney(10000);
+            session.UnlockUpTo(10000);
             Assert.IsFalse(session.Orders.Any(o => o.IsFinal));
             session.Progress.NoteCrafted(Symbol.J);
             session.GrantMoney(0);
