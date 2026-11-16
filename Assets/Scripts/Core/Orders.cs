@@ -192,8 +192,10 @@ namespace Bagels.Core
         public bool IsComplete => filled.All(f => f);
 
         /// <summary>
-        /// The unfilled item <paramref name="element"/> satisfies with the fewest extra toppings (the first such item),
-        /// or -1. <paramref name="extras"/> is how many extras it holds for that item.
+        /// The unfilled item <paramref name="element"/> matches the most of, or -1: of the items it satisfies, the one
+        /// that asks for the most components (all of which it holds), then the one it fits with the fewest extra
+        /// toppings, then the first. For example, an H holding an A and a B goes to "H holding an A" over a plain
+        /// "H". <paramref name="extras"/> is how many extras it holds for that item.
         /// </summary>
         public int FindItemFor(Element element, out int extras)
         {
@@ -202,7 +204,9 @@ namespace Bagels.Core
             for (int i = 0; i < Items.Count; i++)
             {
                 if (filled[i] || !(Items[i].ExtrasIn(element) is int n)) continue;
-                if (best < 0 || n < extras) { best = i; extras = n; }
+                bool better = best < 0 || Items[i].Size > Items[best].Size ||
+                              (Items[i].Size == Items[best].Size && n < extras);
+                if (better) { best = i; extras = n; }
             }
             return best;
         }
@@ -285,6 +289,18 @@ namespace Bagels.Core
         {
             this.rules = rules;
             random = new Random(seed);
+        }
+
+        /// <summary>
+        /// The tutorial's first order (design.md, "Tutorial"): a B, and a C with an A inside, rewarded like any other
+        /// order of that cost. Null if B or C isn't unlocked.
+        /// </summary>
+        public Order First(Progression progress)
+        {
+            if (!progress.IsUnlocked(Symbol.B) || !progress.IsUnlocked(Symbol.C)) return null;
+            var specs = new[] { new ItemSpec(Symbol.B), new ItemSpec(Symbol.C, new ItemSpec(Symbol.A)) };
+            var forSale = rules.Catalog.Where(i => i.Price > 0 && progress.IsUnlocked(i.Symbol)).ToList();
+            return MakeOrder(specs, specs.Sum(s => s.Cost(rules)), forSale);
         }
 
         public Order Final(Symbol target) => new Order(nextId++, new[] { new ItemSpec(target) }, 0, isFinal: true);

@@ -19,6 +19,7 @@ public static class BagelsSetup
     const string DataDir = "Assets/Data/TestSet";
     const string PrefabPath = "Assets/Prefabs/Pastry.prefab";
     const string ScenePath = "Assets/Scenes/main.unity";
+    const string TitleScenePath = "Assets/Scenes/title.unity";
     const string CirclePath = "Assets/Sprites/Circle.png";
 
     [MenuItem("Bagels/Setup Test Level")]
@@ -35,6 +36,26 @@ public static class BagelsSetup
 
         AssetDatabase.SaveAssets();
         Debug.Log("Bagels: test level, prefab and scene set up.");
+    }
+
+    /// <summary>
+    /// (Re)creates the title scene, which holds only a <see cref="TitleScreen"/> (it builds its UI at runtime), and
+    /// lists it first in the build settings so the game starts on it.
+    /// </summary>
+    [MenuItem("Bagels/Setup Title Scene")]
+    public static void SetupTitleScene()
+    {
+        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        new GameObject("Title Screen").AddComponent<TitleScreen>();
+        EditorSceneManager.SaveScene(scene, TitleScenePath);
+
+        var scenes = new List<EditorBuildSettingsScene> { new EditorBuildSettingsScene(TitleScenePath, true) };
+        foreach (var s in EditorBuildSettings.scenes)
+            if (s.path != TitleScenePath) scenes.Add(s);
+        if (!scenes.Exists(s => s.path == ScenePath)) scenes.Add(new EditorBuildSettingsScene(ScenePath, true));
+        EditorBuildSettings.scenes = scenes.ToArray();
+        Debug.Log("Bagels: title scene set up and listed first in the build settings.");
     }
 
     /// <summary>Rebuilds the saved side panel in the open scene, e.g. after editing formulas or pastry types.</summary>

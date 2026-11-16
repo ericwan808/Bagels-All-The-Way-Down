@@ -125,6 +125,36 @@ namespace Bagels.Core.Tests
         }
 
         [Test]
+        public void ResetBoard_OnlyAfterH_GivesAnEmptyH_AndKeepsEverythingElse()
+        {
+            Assert.IsFalse(session.CanResetBoard, "locked until H is unlocked");
+            Assert.Throws<InvalidOperationException>(() => session.ResetBoard());
+
+            session.UnlockUpTo(10000);
+            session.GrantMoney(50);
+            session.GrantStock(Symbol.C, 2);
+            session.Place(root, 0, Symbol.B);
+            var orders = session.Orders.ToList();
+            int money = session.Money;
+            Assert.IsTrue(session.CanResetBoard);
+
+            session.ResetBoard();
+            Assert.AreEqual(Symbol.H, session.State.Root.Symbol);
+            Assert.IsFalse(session.State.RootBoard.Elements.Any(), "the new board starts empty");
+            Assert.AreEqual(money, session.Money);
+            Assert.AreEqual(2, session.StockOf(Symbol.C));
+            CollectionAssert.AreEqual(orders, session.Orders);
+            Assert.IsTrue(session.Progress.IsUnlocked(Symbol.H));
+            Assert.IsFalse(session.CanUndo, "a reset clears the undo history");
+
+            // Formulas still fire on the new board.
+            var board = session.State.RootBoard;
+            session.PlaceA(board, 1);
+            session.PlaceA(board, 0);
+            Assert.IsTrue(session.State.Contains(Symbol.B), "two As next to each other still make a B");
+        }
+
+        [Test]
         public void Progression_KAfterJCrafted_LAfterKCrafted()
         {
             var progress = new Progression(FullRules().Catalog);
@@ -333,6 +363,25 @@ namespace Bagels.Core.Tests
             session.State.PutWithoutCascade(c.Child, 0, Symbol.A);
             Assert.AreEqual(1, order.FindItemFor(c, out int extras), "C(A) fits the second item perfectly");
             Assert.AreEqual(0, extras);
+        }
+
+        [Test]
+        public void FindItemFor_PrefersTheItemItMatchesMost_EvenWithMoreExtras()
+        {
+            // H(C(A)) has one extra for a plain H (the C) and one for H(C) (the A): H(C) matches more of it.
+            var order = new Order(1, new[] { new ItemSpec(Symbol.H), new ItemSpec(Symbol.H, new ItemSpec(Symbol.C)) }, 10);
+            var h = session.State.PutWithoutCascade(root, 0, Symbol.H);
+            var c = session.State.PutWithoutCascade(h.Child, 0, Symbol.C);
+            session.State.PutWithoutCascade(c.Child, 0, Symbol.A);
+            Assert.AreEqual(1, order.FindItemFor(h, out int extras));
+            Assert.AreEqual(1, extras);
+
+            // H(A, B) goes to "H holding an A" over a plain H.
+            order = new Order(2, new[] { new ItemSpec(Symbol.H), new ItemSpec(Symbol.H, new ItemSpec(Symbol.A)) }, 10);
+            var h2 = session.State.PutWithoutCascade(root, 1, Symbol.H);
+            session.State.PutWithoutCascade(h2.Child, 0, Symbol.A);
+            session.State.PutWithoutCascade(h2.Child, 1, Symbol.B);
+            Assert.AreEqual(1, order.FindItemFor(h2));
         }
 
         [Test]

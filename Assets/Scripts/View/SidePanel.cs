@@ -14,11 +14,11 @@ namespace Bagels.View
     /// <summary>
     /// The two screen-side panels, on one camera-space canvas scaled to a 1080-pixel-tall reference.
     /// <para>
-    /// Left: a menu button (no menu yet) and a help button, money, which board is being viewed, the free A spawner,
+    /// Left: a menu button and a help button, money, which board is being viewed, the free A spawner,
     /// the unlocked formulas split into pages (each product icon can be dragged out to buy it), a greyed-out stand-in
     /// for the next unlock with its condition, the status line, and undo and reset. Right: the active orders, each a
-    /// tray that board elements are dragged onto. The help button opens a popup with the controls and a legend for
-    /// reading formulas.
+    /// tray that board elements are dragged onto. The menu button opens a popup to resume or quit to the title
+    /// screen; the help button opens one with the controls and a legend for reading formulas.
     /// </para>
     /// <para>
     /// Editor tooling saves the fixed skeleton into the scene. The formula pages and order cards depend on the game
@@ -32,7 +32,7 @@ namespace Bagels.View
         /// Bump whenever <see cref="Build"/> changes what the fixed skeleton contains, so a panel saved in the scene by
         /// older code is noticed (<see cref="IsOutdated"/>) and rebuilt instead of silently showing the old layout.
         /// </summary>
-        public const int LayoutVersion = 2;
+        public const int LayoutVersion = 3;
 
         public const float Width = 440f;
         public const float RightWidth = 400f;
@@ -44,6 +44,7 @@ namespace Bagels.View
         const float LegendHeight = 96f;
         const float IconButton = 36f;
         static readonly Vector2 HelpSize = new Vector2(600f, 470f);
+        static readonly Vector2 MenuSize = new Vector2(380f, 240f);
         const float FormulaIcon = 38f;
         const float ItemRow = 62f;
         const float ItemIcon = 54f;
@@ -80,6 +81,11 @@ namespace Bagels.View
         [SerializeField] Button helpClose;
         [SerializeField] Button helpBackdrop;
         [SerializeField] GameObject help;
+        [SerializeField] GameObject menu;
+        [SerializeField] Button menuClose;
+        [SerializeField] Button menuBackdrop;
+        [SerializeField] Button resumeButton;
+        [SerializeField] Button quitButton;
 
         // Customer response after an order: a speech box over the board and a floating tip amount.
         const float ResponseFadeIn = 0.25f;
@@ -207,6 +213,7 @@ namespace Bagels.View
             {
                 if (toppings != null) CloseToppings();
                 else if (HelpOpen) CloseHelp();
+                else if (MenuOpen) CloseMenu();
             }
         }
 
@@ -216,6 +223,16 @@ namespace Bagels.View
 
         void ToggleHelp() { if (help != null) help.SetActive(!help.activeSelf); }
         void CloseHelp() { if (help != null) help.SetActive(false); }
+
+        // ------------------------------------------------------------ menu
+
+        public bool MenuOpen => menu != null && menu.activeSelf;
+
+        void ToggleMenu() { if (menu != null) menu.SetActive(!menu.activeSelf); }
+        void CloseMenu() { if (menu != null) menu.SetActive(false); }
+
+        /// <summary>Leaves for the title screen. The game scene starts from scratch when it is loaded again.</summary>
+        void QuitToTitle() => TitleScreen.QuitToTitle();
 
         static readonly Color ButtonColor = ViewColors.Darken(Muted, 0.35f);
 
@@ -229,14 +246,20 @@ namespace Bagels.View
         {
             if (hooked || view == null || !Application.isPlaying) return;
             view.Changed += Refresh;
-            if (resetButton != null) resetButton.onClick.AddListener(view.NewGame);
+            if (resetButton != null) resetButton.onClick.AddListener(view.ResetBoard);
             if (undoButton != null) undoButton.onClick.AddListener(view.Undo);
             if (prevPage != null) prevPage.onClick.AddListener(PreviousPage);
             if (nextPage != null) nextPage.onClick.AddListener(NextPage);
             if (helpButton != null) helpButton.onClick.AddListener(ToggleHelp);
             if (helpClose != null) helpClose.onClick.AddListener(CloseHelp);
             if (helpBackdrop != null) helpBackdrop.onClick.AddListener(CloseHelp);
+            if (menuButton != null) menuButton.onClick.AddListener(ToggleMenu);
+            if (menuClose != null) menuClose.onClick.AddListener(CloseMenu);
+            if (menuBackdrop != null) menuBackdrop.onClick.AddListener(CloseMenu);
+            if (resumeButton != null) resumeButton.onClick.AddListener(CloseMenu);
+            if (quitButton != null) quitButton.onClick.AddListener(QuitToTitle);
             CloseHelp();
+            CloseMenu();
             hooked = true;
             Refresh();
         }
@@ -247,7 +270,7 @@ namespace Bagels.View
             if (view != null)
             {
                 view.Changed -= Refresh;
-                if (resetButton != null) resetButton.onClick.RemoveListener(view.NewGame);
+                if (resetButton != null) resetButton.onClick.RemoveListener(view.ResetBoard);
                 if (undoButton != null) undoButton.onClick.RemoveListener(view.Undo);
             }
             if (prevPage != null) prevPage.onClick.RemoveListener(PreviousPage);
@@ -255,8 +278,33 @@ namespace Bagels.View
             if (helpButton != null) helpButton.onClick.RemoveListener(ToggleHelp);
             if (helpClose != null) helpClose.onClick.RemoveListener(CloseHelp);
             if (helpBackdrop != null) helpBackdrop.onClick.RemoveListener(CloseHelp);
+            if (menuButton != null) menuButton.onClick.RemoveListener(ToggleMenu);
+            if (menuClose != null) menuClose.onClick.RemoveListener(CloseMenu);
+            if (menuBackdrop != null) menuBackdrop.onClick.RemoveListener(CloseMenu);
+            if (resumeButton != null) resumeButton.onClick.RemoveListener(CloseMenu);
+            if (quitButton != null) quitButton.onClick.RemoveListener(QuitToTitle);
             hooked = false;
         }
+
+        // ------------------------------------------------------------ lookups for the tutorial
+
+        /// <summary>The free basic component's spawner block, or null.</summary>
+        public RectTransform Spawner => transform.Find("Panel/Spawner") as RectTransform;
+
+        /// <summary>The formula row whose product is <paramref name="product"/>, or null if it isn't on the page shown.</summary>
+        public RectTransform FormulaRow(Symbol product) =>
+            pageRoot != null ? pageRoot.Find($"Formula {product}") as RectTransform : null;
+
+        /// <summary>The card of an active order, or null.</summary>
+        public RectTransform OrderCard(Order order)
+        {
+            foreach (var (o, card, _) in cards)
+                if (o == order && card != null) return card;
+            return null;
+        }
+
+        /// <summary>True while a popup (menu, help or toppings) covers the screen.</summary>
+        public bool PopupOpen => MenuOpen || HelpOpen || toppings != null;
 
         // ------------------------------------------------------------ orders as drop targets
 
@@ -340,7 +388,7 @@ namespace Bagels.View
             panel = SidePanelRect("Panel", left: true, Width);
             cursor = Pad;
 
-            // Menu (does nothing yet) and help.
+            // Menu and help.
             var corner = Block("Corner Buttons", IconButton);
             menuButton = BuildButton(corner, "", Vector2.zero, new Vector2(IconButton, IconButton), out _);
             menuButton.name = "Menu Button";
@@ -397,6 +445,23 @@ namespace Bagels.View
             ordersRoot = Block("Order Cards", ReferenceHeight - cursor - Pad);
 
             BuildHelp(level);
+            BuildMenu();
+        }
+
+        /// <summary>
+        /// The menu popup, hidden until the menu button opens it: Resume closes it, and Quit to Title leaves for the
+        /// title screen, throwing the game away.
+        /// </summary>
+        void BuildMenu()
+        {
+            var box = BuildPopup("Menu", MenuSize, "Menu", out menu, out menuBackdrop, out menuClose);
+            float width = MenuSize.x - 2 * Pad;
+            var buttons = UiFactory.Rect("Menu Buttons", box, Vector2.zero);
+            Place(buttons, new Vector2(Pad, Pad + IconButton + 2 * Gap), new Vector2(width, 2 * ButtonHeight + 3 * Gap));
+            resumeButton = BuildButton(buttons, "Resume", Vector2.zero, new Vector2(width, ButtonHeight), out _);
+            quitButton = BuildButton(buttons, "Quit to Title", new Vector2(0f, ButtonHeight + 3 * Gap),
+                                     new Vector2(width, ButtonHeight), out _);
+            menu.SetActive(false);
         }
 
         /// <summary>
@@ -538,6 +603,7 @@ namespace Bagels.View
             if (viewing != null) viewing.text = "Viewing: " + view.FocusPath();
             if (undoButton != null) undoButton.interactable = view.CanUndo;
             if (undoLabel != null) undoLabel.text = view.CanUndo ? $"Undo ({session.UndoCount})" : "Undo";
+            if (resetButton != null) resetButton.interactable = view.CanResetBoard;
             RefreshStatus(session);
             RebuildFormulaPage(session);
             RebuildOrders(session);
@@ -870,11 +936,13 @@ namespace Bagels.View
             cards.Add((order, card, bg));
 
             int filled = Enumerable.Range(0, order.Items.Count).Count(order.IsFilled);
-            string title = order.IsFinal ? "FINAL ORDER: deliver it to win" : $"Order #{order.Id}  ·  {order.RewardText()}" +
-                (order.Imperfections > 0 ? $"  ({order.Imperfections} extra)" : "");
-            var header = UiFactory.Text("Header", card, title, 18, order.IsFinal ? Gold : ViewColors.Paper,
-                                        TextAnchor.MiddleLeft, FontStyle.Bold);
-            Place(header.rectTransform, new Vector2(10f, 4f), new Vector2(width - 70f, 28f));
+            if (order.IsFinal)
+            {
+                var header = UiFactory.Text("Header", card, "FINAL ORDER: deliver it to win", 18, Gold,
+                                            TextAnchor.MiddleLeft, FontStyle.Bold);
+                Place(header.rectTransform, new Vector2(10f, 4f), new Vector2(width - 70f, 28f));
+            }
+            else BuildRewardHeader(card, order, width - 70f);
             var progress = UiFactory.Text("Progress", card, $"{filled}/{order.Items.Count}", 16, Muted, TextAnchor.MiddleRight);
             Place(progress.rectTransform, new Vector2(width - 64f, 4f), new Vector2(54f, 28f));
 
@@ -909,6 +977,38 @@ namespace Bagels.View
                 rowTop += rowHeight;
             }
             return height;
+        }
+
+        const float RewardIcon = 24f;
+
+        /// <summary>
+        /// The card's header: an icon for each kind of component the order gives, with "xN" when it gives more than
+        /// one, then how many extra toppings have been handed in so far.
+        /// </summary>
+        void BuildRewardHeader(RectTransform card, Order order, float maxWidth)
+        {
+            const float top = 4f, height = 28f;
+            float x = 10f, right = 10f + maxWidth;
+            foreach (var group in order.RewardComponents.GroupBy(s => s).OrderByDescending(g => g.Key))
+            {
+                if (x + RewardIcon > right) break;
+                var icon = UiFactory.PastryIcon(card, view.TypeOf(group.Key), RewardIcon, view);
+                At(icon, new Vector2(x + RewardIcon * 0.5f, -(top + height * 0.5f)));
+                x += RewardIcon + 3f;
+                if (group.Count() > 1)
+                {
+                    var count = UiFactory.Text("Count", card, $"x{group.Count()}", 16, ViewColors.Paper,
+                                               TextAnchor.MiddleLeft, FontStyle.Bold);
+                    Place(count.rectTransform, new Vector2(x, top), new Vector2(32f, height));
+                    x += 30f;
+                }
+                x += 6f;
+            }
+            if (order.Imperfections > 0 && x < right)
+            {
+                var extra = UiFactory.Text("Extra", card, $"({order.Imperfections} extra)", 16, Muted, TextAnchor.MiddleLeft);
+                Place(extra.rectTransform, new Vector2(x, top), new Vector2(right - x, height));
+            }
         }
 
         /// <summary>A bread with toppings is drawn big enough to see them inside its slots.</summary>

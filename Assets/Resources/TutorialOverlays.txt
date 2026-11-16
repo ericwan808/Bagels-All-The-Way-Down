@@ -1,0 +1,74 @@
+# Script text for the tutorial overlays, in the order they are shown.
+#
+# A header like [place-a] starts one overlay; the name inside the brackets is the overlay's id, which the game
+# uses to know when to show it. Each line under a header is one page of that overlay: the player reads them in
+# order and clicks to go on to the next. An overlay with no lines is skipped. Blank lines and lines starting
+# with # are ignored.
+
+# Opening the game for the first time.
+[welcome]
+Bonjour! Welcome to L'Pâtisserie Existentialiste, where to bake is to question ones own existence.
+Look, there is already a customer with an order! Let's see what they want.
+
+# Dragging or double-clicking the free A onto a slot.
+[place-a]
+All bagels and breads are created using other bagels and breads. The foundational bagel is the everything bagel. Try dragging one into an empty slot on the board.
+
+# Two As side by side merging into a B: how formulas fire.
+[first-formula]
+Now, to create new delicious pastries requires specific adjacency rules. For example, to create an everything bagel with cream cheese, we need to place two normal everything bagels side by side. Try it!
+
+# Shown once the first B is created
+[first-formula-complete]
+Fantastique!
+
+# Two Bs side by side merging into a C
+[recursive-breads]
+Some breads have slots of their own. Try creating a slice of wonderbread.
+
+# Scrolling up to open a bread's board, and down to go back.
+[zoom]
+To place toppings on to the bread, hover over it on the board and scroll up to expand it.
+At this new level of recursion, all the rules of the pastry universe are still the same! Place an everything bagel and scroll back up to return to the main board.
+
+# consuming ingredients
+[consuming-ingredients]
+Creating a slice of wonderbread has consumed all of our bagels with cream cheese! Try creating another one.
+
+# Dragging a finished item from the board onto an order.
+[hand-in]
+To fulfill an order, drag a pastry from the board to the order ticket.
+The customer seemed happy with their order and gave you a tip! The money you earn can be used to buy difficult-to-create pastries or to unlock formulas to create new pastries.
+
+
+# When E is unlocked
+[vertical adjacency]
+Some formulas require ingredients on a different recursive level.
+To make a croissant requires an everything bagel to be adjacent to two breads each holding an everything everything bagel.
+
+# When F is unlocked
+[catalysts]
+Some ingredients are not consumed in a formula unless they are placed last.
+Try using a single slice of wonderbread to create multiple Dharma bagels.
+
+# Dragging a formula's product out of the side panel to buy it.
+[buy-component]
+
+# Extra toppings in bread are accepted but cut the tip.
+[extras-and-tips]
+That customer did not seem very happy with their order, so they tipped you less.
+Do not bring shame to the name L'Pâtisserie Existentialiste.
+
+# Order rewards going into stock, and placing stocked components for free.
+[stock]
+
+# Undoing the last placements.
+[undo]
+
+# Resetting the board to a fresh H once H is unlocked.
+[reset]
+You've unlocked the formula for Naan bread, and this whole time you've been working on one big piece of Naan bread!\\
+If your board ever gets overwehlmed you can toss the entire thing away and start fresh.
+
+# The final order appearing: delivering it wins the game.
+[final-order]

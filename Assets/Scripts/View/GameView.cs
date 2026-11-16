@@ -163,6 +163,9 @@ namespace Bagels.View
         public Color CatalystColor => catalystColor;
         public Camera Camera => cam != null ? cam : cam = Camera.main;
 
+        /// <summary>The side panel, once <see cref="Init"/> has found or built it.</summary>
+        public SidePanel Panel => panel;
+
         /// <summary>The bread whose board is the current board. The root unless the player has zoomed in.</summary>
         public Element Focus => focus;
 
@@ -211,6 +214,7 @@ namespace Bagels.View
             }
             if (panel == null) panel = SidePanel.Create(this);
             if (FindAnyObjectByType<BackgroundMusic>() == null) gameObject.AddComponent<BackgroundMusic>();
+            if (Application.isPlaying && GetComponent<TutorialOverlay>() == null) gameObject.AddComponent<TutorialOverlay>().Init(this);
             if (Camera != null) FitCamera(SidePanel.ScreenFraction(Camera.aspect), SidePanel.RightScreenFraction(Camera.aspect));
         }
 
@@ -430,6 +434,25 @@ namespace Bagels.View
             LastResult = null;
             LastError = null;
             Message = null;
+            Redraw();
+            Changed?.Invoke();
+        }
+
+        /// <summary>True if the board can be swapped for a fresh H (see <see cref="GameSession.ResetBoard"/>).</summary>
+        public bool CanResetBoard => session != null && session.CanResetBoard;
+
+        /// <summary>Throws away the board and starts over on an empty H, keeping money, stock, unlocks and orders.</summary>
+        public void ResetBoard()
+        {
+            if (!CanResetBoard) return;
+            StopZoom();
+            CancelCarry();
+            CancelElementDrag();
+            session.ResetBoard();
+            focus = State.Root;
+            LastResult = null;
+            LastError = null;
+            Message = "Started over on a fresh board.";
             Redraw();
             Changed?.Invoke();
         }
