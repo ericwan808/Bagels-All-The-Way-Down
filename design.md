@@ -12,6 +12,8 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - The root of the game is a W7 board.
 - Elements cannot be moved once they are placed or created on the board. The only exception is dragging them to an order tray (see Orders).
 - An undo button reverts the player's most recent placement. A placement is an element the player placed themselves, not a product created by a formula. Undoing a placement also reverts the cascade it triggered. Undo goes back at most 10 placements from the current state.
+- A reset button unlocks once H is unlocked. It throws away the whole board and starts over on an empty H, keeping money, stock, unlocked formulas and orders. A reset is final: it clears the undo history.
+- The game opens on a title screen with the game's name and a Start Game button. The menu button in the game opens a popup with Resume, which closes it, and Quit to Title, which returns to the title screen and throws the game away: starting again begins a new game.
 
 #### Adjacency
 - **Normal adjacency**: two elements in neighbouring slots of the same board.
@@ -59,6 +61,7 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
   - Each extra counts once, whatever is inside it. An extra E holding two Ds is one extra.
   - A bread with no listed contents accepts anything, but everything inside it is extra.
   - If the listed contents could be matched in more than one way, the way with the fewest extras counts.
+  - If an element fits more than one of an order's items, it fills the item it matches the most: the one that asks for the most components. A tie goes to the item it fits with the fewest extras, then to the first. For example, an H holding an A and a B fills "H holding an A" rather than a plain "H".
 - To fulfill an order, the player drags matching components from the board to that order's tray. An order can be filled one item at a time, but each item goes in as one unit. In the example, the B and the "C containing an A and a B" can be added separately, but the C goes in together with its contents.
 - An order has at most 3 items.
 - Orders only ask for bagels and breads that are currently available.
@@ -70,7 +73,7 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
     - Given components go into the player's stock (see Money and purchasing). They are given even when the order is imperfect.
   - **Tip**: the rest of the reward's value is paid as money. A perfect order earns the full tip. An imperfect order earns 60% of it with 1 extra topping, 30% with 2, 10% with 3, 5% with 4, and nothing with 5 or more.
   - In the early game, when no component can be given, the whole reward is the tip.
-  - The tip amount is never shown in advance. An order card lists only the components and the word "tip".
+  - The tip amount is never shown in advance. An order card shows only an icon for each component it gives, with "xN" when it gives more than one.
 - **Customer response**: when an order is completed, a small text box with the customer's reaction pops up in the top-right corner of the board, next to the orders panel. It fades in quickly, lingers for about 3 seconds, then fades out. The line is picked at random from those written for that many extra toppings, in `Assets/Resources/CustomerResponses.txt`.
   - Along with the text box, the tip appears as a small green "+$amount" beside the box that fades in, floats up to the top of the screen, and disappears after about a second. An order that earns no tip shows a red "+0".
 - The game starts with 1 order, and at most 3 orders are active at a time.
@@ -107,6 +110,20 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - Scrolling down zooms out to the parent board. On the root board this does nothing.
 - Zooming does not move the camera. Instead, the parent board and the sibling elements move to the side, out of view, and the target child expands to fill the view.
 - Once that works, add zoom-in and zoom-out animations in which the parent board gradually fades out or in.
+
+#### Tutorial
+- A new game starts with a tutorial: a series of overlays whose text lives in `Assets/Resources/TutorialOverlays.txt`, one `[id]` header per overlay and one line per page. An overlay with no text is skipped.
+- Each page shows in a box at the top centre of the screen. A page either waits for a click on the box, or waits for the player to do what it asks and then moves on by itself. Some overlays also point at something with a pulsing gold frame. The tutorial hides while a popup is open.
+- The first order of every game is a B and a C holding an A, so the tutorial can walk through making them.
+- The overlays, in order:
+  - `welcome`: click through.
+  - `place-a`: frames the free A in the side panel; moves on once something is on the board.
+  - `first-formula`: frames the formula for B; moves on once a B is crafted.
+  - `first-formula-complete`: click through.
+  - `recursive-breads`: frames the formula for C; moves on once a C is crafted.
+  - `zoom`: the first page moves on once the player opens a bread's board, the second once a C holding an A is on the main board and they are back on it.
+  - `consuming-ingredients`: making the C used up the Bs; moves on once a B is on the main board again.
+  - `hand-in`: the first page frames the first order and moves on once it is complete; the second is clicked through.
 
 #### Audio
 - The main theme (`Assets/Resources/Audio/BATWD_01_MainTheme.ogg`) loops in the background for the whole session. It fades in from silence over about 3 seconds when the game begins, and keeps playing when a new game starts.

@@ -71,7 +71,10 @@ namespace Bagels.Core
             generator = new OrderGenerator(rules, seed);
             RefreshUnlocks();
             LastUnlocked = Array.Empty<PastryInfo>();
-            AddOrder();
+            // The first order is always the tutorial's B and C holding an A, if those exist.
+            var first = generator.First(Progress);
+            if (first != null) orders.Add(first);
+            else AddOrder();
         }
 
         /// <summary>A formula is active once its product is unlocked.</summary>
@@ -154,6 +157,24 @@ namespace Bagels.Core
             State = state;
             Money = money;
             stock = stocked;
+            LastUnlocked = Array.Empty<PastryInfo>();
+        }
+
+        /// <summary>The bread a board reset starts over with.</summary>
+        public const Symbol ResetBoardSymbol = Symbol.H;
+
+        /// <summary>True once the player may swap the board for a fresh one: after H is unlocked.</summary>
+        public bool CanResetBoard => !Won && Progress.IsUnlocked(ResetBoardSymbol);
+
+        /// <summary>
+        /// Throws away the whole board and starts over on an empty H. Everything else (money, stock, unlocks, orders)
+        /// stays. Like a delivery, it is final: it clears the undo history. Throws before H is unlocked.
+        /// </summary>
+        public void ResetBoard()
+        {
+            if (!CanResetBoard) throw new InvalidOperationException($"The board can't be reset before {ResetBoardSymbol} is unlocked.");
+            State = new GameState(Rules, ResetBoardSymbol) { IsActive = IsFormulaUnlocked, RecordSnapshots = RecordSnapshots };
+            undo.Clear();
             LastUnlocked = Array.Empty<PastryInfo>();
         }
 

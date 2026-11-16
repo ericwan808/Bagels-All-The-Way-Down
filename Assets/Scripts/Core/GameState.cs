@@ -90,10 +90,13 @@ namespace Bagels.Core
         /// </summary>
         public bool RecordSnapshots { get; set; }
 
-        public GameState(Rules rules)
+        public GameState(Rules rules) : this(rules, rules?.RootSymbol ?? default) { }
+
+        /// <summary>A fresh tree whose root is an empty <paramref name="root"/>.</summary>
+        public GameState(Rules rules, Symbol root)
         {
             Rules = rules ?? throw new ArgumentNullException(nameof(rules));
-            Root = Create(rules.RootSymbol);
+            Root = Create(root);
         }
 
         GameState(Rules rules, Element root, Func<Symbol, bool> isActive)
