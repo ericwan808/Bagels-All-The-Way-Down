@@ -60,6 +60,9 @@ namespace Bagels.Core
             set => State.RecordSnapshots = value; // undo snapshots are clones, so they keep the setting
         }
 
+        /// <summary>Orders completed with at least one extra topping, over the whole game.</summary>
+        public int ImperfectOrdersCompleted { get; private set; }
+
         /// <summary>Components unlocked by the last action, for the view to announce.</summary>
         public IReadOnlyList<PastryInfo> LastUnlocked { get; private set; } = Array.Empty<PastryInfo>();
 
@@ -88,7 +91,7 @@ namespace Bagels.Core
         public bool CanBuyNextFormula => !Won && Progress.NextFormulaPrice is int price && Money >= price;
 
         /// <summary>
-        /// Buys the next formula for its component's price, unlocking it (and any that come with it, like F with E).
+        /// Buys the next formula for its component's price, unlocking it.
         /// Unlocks are never taken back, so undo keeps the formula: every undo snapshot is charged the price too, and
         /// undoing still refunds only placements. Throws if the formula can't be bought now.
         /// </summary>
@@ -197,6 +200,7 @@ namespace Bagels.Core
             if (!order.IsComplete) return DeliveryOutcome.Accepted;
 
             Money += order.TipEarned;
+            if (order.Imperfections > 0) ImperfectOrdersCompleted++;
             foreach (var component in order.RewardComponents) stock[component] = StockOf(component) + 1;
             orders.Remove(order);
             if (order.IsFinal)

@@ -14,7 +14,7 @@ namespace Bagels.Core
     /// ...
     /// </code>
     /// A header <c>[id]</c> starts an overlay; each line under it is one page. Blank lines and lines starting with #
-    /// are ignored. Which overlay shows when is decided by the game, by id.
+    /// are ignored, and so is a <c>\\</c> at the end of a line. Which overlay shows when is decided by the game, by id.
     /// </summary>
     public sealed class TutorialScript
     {
@@ -35,6 +35,7 @@ namespace Bagels.Core
             {
                 lineNumber++;
                 var line = raw.Trim();
+                if (line.EndsWith(@"\\")) line = line.Substring(0, line.Length - 2).TrimEnd(); // a stray marker, ignored
                 if (line.Length == 0 || line.StartsWith("#")) continue;
                 if (line.StartsWith("[") && line.EndsWith("]"))
                 {

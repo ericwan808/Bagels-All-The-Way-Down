@@ -41,23 +41,29 @@ To fulfill an order, drag a pastry from the board to the order ticket.
 The customer seemed happy with their order and gave you a tip! The money you earn can be used to buy difficult-to-create pastries or to unlock formulas to create new pastries.
 
 
+# When the player makes enough money to buy the formula for D
+[unlocking-D]
+You've earned enough money to unlock the next formula!\\
+You can also use your money to buy unlocked pastries directly.\\
+When a single pattern on the board could satisfy multiple formulas, it will always create the highest tier of pastry possible.\\
+
 # When E is unlocked
-[vertical adjacency]
-Some formulas require ingredients on a different recursive level.
-To make a croissant requires an everything bagel to be adjacent to two breads each holding an everything everything bagel.
+[vertical-adjacency]
+Some formulas require ingredients that are toppings of adjacent breads.\\
+To make a croissant requires an everything bagel to be adjacent to two breads each holding an everything everything bagel.\\
+Note that the bread holding the toppings will not be consumed by the formula. Give it a try!
 
 # When F is unlocked
 [catalysts]
-Some ingredients are not consumed in a formula unless they are placed last.
-Try using a single slice of wonderbread to create multiple Dharma bagels.
-
-# Dragging a formula's product out of the side panel to buy it.
-[buy-component]
+Some ingredients are not consumed in a formula unless they are placed last.\\
+These catalysts will be marked in the formula with a golden circle.\\
+Try using a single slice of wonder bread to create multiple Dharma bagels.
 
 # Extra toppings in bread are accepted but cut the tip.
 [extras-and-tips]
-That customer did not seem very happy with their order, so they tipped you less.
+That customer did not seem very happy with their order, so they tipped you less.\\
 Do not bring shame to the name L'Pâtisserie Existentialiste.
+
 
 # Order rewards going into stock, and placing stocked components for free.
 [stock]

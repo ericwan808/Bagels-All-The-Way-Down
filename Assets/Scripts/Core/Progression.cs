@@ -43,18 +43,18 @@ namespace Bagels.Core
         /// What the next formula costs to buy, or null if it isn't bought: it unlocks by crafting instead (K, L), or
         /// everything is unlocked. The price is the component's own price.
         /// </summary>
-        public int? NextFormulaPrice => NextLockedIndex() is int i && !catalog[i].UnlocksWithPrevious ? catalog[i].Price : null;
+        public int? NextFormulaPrice => NextLockedIndex() is int i ? catalog[i].Price : null;
 
         /// <summary>
-        /// Unlocks the next formula, which must be one that is bought (<see cref="NextFormulaPrice"/>), with any that
-        /// unlock along with it, then anything whose crafting condition already holds. Paying is the caller's job.
+        /// Unlocks the next formula, which must be one that is bought (<see cref="NextFormulaPrice"/>), then anything
+        /// whose crafting condition already holds. Paying is the caller's job.
         /// Returns what was newly unlocked.
         /// </summary>
         public List<PastryInfo> Purchase()
         {
             if (NextFormulaPrice == null) throw new InvalidOperationException("The next formula can't be bought.");
             var gained = new List<PastryInfo>();
-            UnlockWithFollowers(NextLockedIndex().Value, gained);
+            Unlock(NextLockedIndex().Value, gained);
             gained.AddRange(Update());
             return gained;
         }
@@ -74,20 +74,12 @@ namespace Bagels.Core
             while (NextLockedIndex() is int i)
             {
                 var info = catalog[i];
-                bool ready = info.UnlocksWithPrevious && i > 0 && unlocked.Contains(catalog[i - 1].Symbol)
-                             || (info.Price is int price ? budget >= price
-                                                         : i > 0 && crafted.Contains(catalog[i - 1].Symbol));
+                bool ready = info.Price is int price ? budget >= price
+                                                     : i > 0 && crafted.Contains(catalog[i - 1].Symbol);
                 if (!ready) break;
-                UnlockWithFollowers(i, gained);
+                Unlock(i, gained);
             }
             return gained;
-        }
-
-        void UnlockWithFollowers(int i, List<PastryInfo> gained)
-        {
-            Unlock(i, gained);
-            // Followers unlock at the same time (F with E).
-            for (int j = i + 1; j < catalog.Count && catalog[j].UnlocksWithPrevious; j++) Unlock(j, gained);
         }
 
         void Unlock(int i, List<PastryInfo> gained)

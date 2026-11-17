@@ -18,9 +18,8 @@ MonoBehaviour:
   color: {r: 0.86, g: 0.68, b: 0.46, a: 1}
   layout: 2
   purchasable: 1
-  price: 15
+  price: 10
   unlockedAtStart: 1
-  unlocksWithPrevious: 0
   orderLevels: 1
   allowedContents:
   - A

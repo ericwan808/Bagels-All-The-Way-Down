@@ -16,9 +16,6 @@ namespace Bagels.Core
         /// <summary>Known from the start (A, B and C).</summary>
         public bool UnlockedAtStart { get; }
 
-        /// <summary>Unlocks together with the component before it in the list (F with E).</summary>
-        public bool UnlocksWithPrevious { get; }
-
         /// <summary>
         /// For bread: how many levels of contents an order may ask this bread to hold, counted from it downwards
         /// (C 1: only bagels inside; E 2; H 3). A bread nested inside another gets the smaller of its own limit and
@@ -34,7 +31,7 @@ namespace Bagels.Core
         /// </summary>
         public bool HighLevel { get; }
 
-        public PastryInfo(Symbol symbol, string name, int? price, bool unlockedAtStart = false, bool unlocksWithPrevious = false,
+        public PastryInfo(Symbol symbol, string name, int? price, bool unlockedAtStart = false,
                           int orderLevels = 1, ContentRules contentRules = null, bool highLevel = false)
         {
             HighLevel = highLevel;
@@ -44,7 +41,6 @@ namespace Bagels.Core
             Name = name ?? symbol.ToString();
             Price = price;
             UnlockedAtStart = unlockedAtStart;
-            UnlocksWithPrevious = unlocksWithPrevious;
         }
 
         public override string ToString() => $"{Symbol} ({Name})";

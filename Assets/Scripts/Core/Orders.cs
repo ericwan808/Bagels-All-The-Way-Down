@@ -118,10 +118,10 @@ namespace Bagels.Core
     public sealed class Order
     {
         public const int MaxItems = 3;
-        /// <summary>At this many imperfections the tip is gone.</summary>
-        public const int ImperfectionsToLoseTip = 5;
-        /// <summary>The share of the tip earned with 0, 1, 2, ... extra toppings, up to <see cref="ImperfectionsToLoseTip"/>.</summary>
-        static readonly double[] TipShares = { 1.0, 0.6, 0.3, 0.1, 0.05, 0.0 };
+        /// <summary>The share of the tip earned with 0, 1, 2, ... extra toppings; the last share holds from then on.</summary>
+        static readonly double[] TipShares = { 1.0, 0.9, 0.7, 0.5, 0.5, 0.5, 0.5, 0.1 };
+        /// <summary>From this many imperfections on, the tip is at its lowest share.</summary>
+        public static readonly int ImperfectionsForLowestTip = TipShares.Length - 1;
 
         readonly bool[] filled;
 
@@ -166,14 +166,13 @@ namespace Bagels.Core
         }
 
         /// <summary>
-        /// The tip after <paramref name="imperfections"/> extra toppings: all of it for none, then 60%, 30%, 10%
-        /// and 5%, and nothing from <see cref="ImperfectionsToLoseTip"/> on.
+        /// The tip after <paramref name="imperfections"/> extra toppings: all of it for none, then 90%, 70%, 50% for
+        /// 3 to 6, and 10% from <see cref="ImperfectionsForLowestTip"/> on.
         /// </summary>
         public int TipAfter(int imperfections)
         {
             if (imperfections <= 0) return Tip;
-            if (imperfections >= ImperfectionsToLoseTip) return 0;
-            return (int)Math.Round(Tip * TipShares[imperfections]);
+            return (int)Math.Round(Tip * TipShares[Math.Min(imperfections, ImperfectionsForLowestTip)]);
         }
 
         /// <summary>
@@ -257,9 +256,9 @@ namespace Bagels.Core
         /// <summary>...give or take this much of the cost.</summary>
         public const double RewardJitter = 0.05;
         /// <summary>The components aim to be worth about this share of the reward; the tip is the rest...</summary>
-        public const double ComponentShare = 2.0 / 3.0;
+        public const double ComponentShare = 1.0 / 3.0;
         /// <summary>...and are never worth more than this share of it.</summary>
-        public const double MaxComponentShare = 0.8;
+        public const double MaxComponentShare = 0.4;
         /// <summary>Components stop being added once they reach this share of their target.</summary>
         const double CloseEnough = 0.8;
         /// <summary>

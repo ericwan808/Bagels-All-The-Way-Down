@@ -20,6 +20,5 @@ MonoBehaviour:
   purchasable: 0
   price: 0
   unlockedAtStart: 0
-  unlocksWithPrevious: 0
   orderLevels: 1
   highLevel: 1

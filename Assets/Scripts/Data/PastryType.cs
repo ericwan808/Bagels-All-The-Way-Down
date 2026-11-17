@@ -24,8 +24,6 @@ namespace Bagels.Data
         [SerializeField] int price;
         [Tooltip("Known from the start (A, B, C).")]
         [SerializeField] bool unlockedAtStart;
-        [Tooltip("Unlocks together with the component before it in the formula list (F with E).")]
-        [SerializeField] bool unlocksWithPrevious;
         [Tooltip("Bread only: how many levels deep an order may fill it (C 1 = only bagels inside, E 2, H 3).")]
         [Min(1)] [SerializeField] int orderLevels = 1;
         [Tooltip("Counts as high-level in orders (G and after): one layer of an order usually holds at most 2 of these, never more than 3.")]
@@ -51,12 +49,11 @@ namespace Bagels.Data
         public bool IsBread => layout != LayoutKind.None;
         public int? Price => purchasable ? price : (int?)null;
         public bool UnlockedAtStart => unlockedAtStart;
-        public bool UnlocksWithPrevious => unlocksWithPrevious;
 
         public int OrderLevels => orderLevels;
 
         public PastryInfo ToInfo() =>
-            new PastryInfo(symbol, DisplayName, Price, unlockedAtStart, unlocksWithPrevious, orderLevels, ToContentRules(), highLevel);
+            new PastryInfo(symbol, DisplayName, Price, unlockedAtStart, orderLevels, ToContentRules(), highLevel);
 
         public ContentRules ToContentRules() => new ContentRules(
             (allowedContents ?? System.Array.Empty<string>()).Where(s => !string.IsNullOrWhiteSpace(s)).Select(ContentRules.ParseSymbols),
@@ -84,14 +81,13 @@ namespace Bagels.Data
         }
 
         /// <summary>Used by editor tooling. A null price makes the component craft-only.</summary>
-        public void EditorInitEconomy(int? price, bool unlockedAtStart, bool unlocksWithPrevious = false, int orderLevels = 1)
+        public void EditorInitEconomy(int? price, bool unlockedAtStart, int orderLevels = 1)
         {
             highLevel = false;
             this.orderLevels = Mathf.Max(1, orderLevels);
             purchasable = price != null;
             this.price = price ?? 0;
             this.unlockedAtStart = unlockedAtStart;
-            this.unlocksWithPrevious = unlocksWithPrevious;
         }
 
         /// <summary>Used by editor tooling: marks this component as high-level in orders (call after EditorInitEconomy).</summary>

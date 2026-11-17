@@ -574,15 +574,24 @@ namespace Bagels.View
             }
         }
 
-        static Button BuildButton(RectTransform block, string text, Vector2 topLeft, Vector2 size, out Text label)
+        /// <summary>
+        /// A button that starts out <paramref name="interactable"/> or not. Rebuilt buttons (like the buy button) must
+        /// pass this rather than set it afterwards: changing it on a live button cross-fades its tint, which flickers
+        /// on every rebuild. Set while the button is inactive, it starts in the right state.
+        /// </summary>
+        static Button BuildButton(RectTransform block, string text, Vector2 topLeft, Vector2 size, out Text label,
+                                  bool interactable = true)
         {
             var img = UiFactory.Image($"{text} Button", block, null, ButtonColor, size);
             img.raycastTarget = true;
             Place(img.rectTransform, topLeft, size);
+            img.gameObject.SetActive(false);
             var button = img.gameObject.AddComponent<Button>();
             button.targetGraphic = img;
+            button.interactable = interactable;
             label = UiFactory.Text("Label", img.rectTransform, text, 22, ViewColors.Paper, TextAnchor.MiddleCenter, FontStyle.Bold);
             UiFactory.Fill(label.rectTransform);
+            img.gameObject.SetActive(true);
             return button;
         }
 
@@ -806,36 +815,27 @@ namespace Bagels.View
             var mark = UiFactory.Text("Mystery", box.rectTransform, "?", 34, Muted, TextAnchor.MiddleCenter, FontStyle.Bold);
             Place(mark.rectTransform, new Vector2(8f, 0f), new Vector2(48f, LockedHeight));
 
-            int? price = session.Progress.NextFormulaPrice;
-            float textWidth = width - 72f;
-            if (price is int cost)
+            if (session.Progress.NextFormulaPrice is int cost)
             {
-                // A formula that is bought: a buy button, dimmed until the player can afford it.
+                // A formula that is bought: just a buy button, dimmed until the player can afford it.
                 const float buyWidth = 110f;
-                textWidth -= buyWidth + 8f;
+                bool affordable = session.CanBuyNextFormula;
                 var buy = BuildButton(box.rectTransform, $"Buy ${cost}", new Vector2(width - buyWidth - 10f, (LockedHeight - 40f) * 0.5f),
-                                      new Vector2(buyWidth, 40f), out var buyLabel);
+                                      new Vector2(buyWidth, 40f), out var buyLabel, affordable);
                 buy.name = "Buy Formula Button";
                 buyLabel.fontSize = 19;
-                bool affordable = session.CanBuyNextFormula;
-                buy.interactable = affordable;
                 if (affordable) buy.targetGraphic.color = ViewColors.Darken(Gold, 0.45f);
                 else buyLabel.color = Muted;
                 if (Application.isPlaying) buy.onClick.AddListener(view.BuyNextFormula);
+                return;
             }
 
-            var text = UiFactory.Text("Condition", box.rectTransform, "Next formula\n" + UnlockCondition(next, session),
-                                      16, ViewColors.Paper);
-            Place(text.rectTransform, new Vector2(64f, 0f), new Vector2(textWidth, LockedHeight));
-        }
-
-        /// <summary>How the next component unlocks, without saying what it is.</summary>
-        public static string UnlockCondition(PastryInfo next, GameSession session)
-        {
-            if (session.Progress.NextFormulaPrice is int price)
-                return session.Money >= price ? "Ready to buy" : $"You have ${session.Money}";
+            // A formula that unlocks by crafting: say what to craft, without saying what it makes.
             var previous = session.Progress.Previous(next);
-            return $"Unlocks when you craft a {previous?.Name ?? "previous component"}";
+            var text = UiFactory.Text("Condition", box.rectTransform,
+                                      $"Next formula\nUnlocks when you craft a {previous?.Name ?? "previous component"}",
+                                      16, ViewColors.Paper);
+            Place(text.rectTransform, new Vector2(64f, 0f), new Vector2(width - 72f, LockedHeight));
         }
 
         /// <summary>

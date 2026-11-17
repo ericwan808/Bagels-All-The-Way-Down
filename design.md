@@ -51,7 +51,6 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - At the start, the player has only As and knows the formulas for B and C.
 - Formulas unlock in the order of the formula list. The next formula is bought: it costs the price of its component, and the player buys it with the button on the greyed-out stand-in in the side panel once they have that much money. Buying a formula also lets the player buy that component.
 - Buying a formula is final: undo never takes the formula back or refunds it.
-- F is a special case: it unlocks at the same time as E, which is bought for E's price alone.
 - A component with no price has its formula revealed once the component before it in the list is created on the board by a formula. Buying that component does not count. K unlocks when a J is first crafted, and L unlocks when K is first crafted.
 
 ### Orders
@@ -65,13 +64,13 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - To fulfill an order, the player drags matching components from the board to that order's tray. An order can be filled one item at a time, but each item goes in as one unit. In the example, the B and the "C containing an A and a B" can be added separately, but the C goes in together with its contents.
 - An order has at most 3 items.
 - Orders only ask for bagels and breads that are currently available.
-- **Rewards**: an order's reward is worth about the total cost of its items, give or take 5% of the cost. In the example above, the items cost $25, so the reward is worth about $26. The reward has two parts: components and a tip.
-  - **Components**: worth about 2/3 of the reward, which is about 2/3 of the order's cost. They may fall a little short of that, and never exceed 80% of the reward.
+- **Rewards**: an order's reward is worth about the total cost of its items, give or take 5% of the cost. In the example above, the items cost $14, so the reward is worth about $14. The reward has two parts: components and a tip.
+  - **Components**: worth about 1/3 of the reward, which is about 1/3 of the order's cost. They may fall a little short of that, and never exceed 40% of the reward.
     - A reward only gives components that are unlocked and priced. It never gives A, or either of the two most recently unlocked components. Breads are given empty.
     - A reward gives at most 5 components.
     - Rewards favour the most valuable component that still fits, so they shift to higher-value components as the player progresses. Some randomness stays: each cheaper component has half the chance of the one above it.
     - Given components go into the player's stock (see Money and purchasing). They are given even when the order is imperfect.
-  - **Tip**: the rest of the reward's value is paid as money. A perfect order earns the full tip. An imperfect order earns 60% of it with 1 extra topping, 30% with 2, 10% with 3, 5% with 4, and nothing with 5 or more.
+  - **Tip**: the rest of the reward's value is paid as money. A perfect order earns the full tip. An imperfect order earns 90% of it with 1 extra topping, 70% with 2, 50% with 3 to 6, and 10% with 7 or more.
   - In the early game, when no component can be given, the whole reward is the tip.
   - The tip amount is never shown in advance. An order card shows only an icon for each component it gives, with "xN" when it gives more than one.
 - **Customer response**: when an order is completed, a small text box with the customer's reaction pops up in the top-right corner of the board, next to the orders panel. It fades in quickly, lingers for about 3 seconds, then fades out. The line is picked at random from those written for that many extra toppings, in `Assets/Resources/CustomerResponses.txt`.
@@ -124,6 +123,11 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
   - `zoom`: the first page moves on once the player opens a bread's board, the second once a C holding an A is on the main board and they are back on it.
   - `consuming-ingredients`: making the C used up the Bs; moves on once a B is on the main board again.
   - `hand-in`: the first page frames the first order and moves on once it is complete; the second is clicked through.
+- Some overlays are not in the sequence: each shows once per game, the first time its condition holds, and waits its turn if another overlay is showing. Their pages are clicked through.
+  - `unlocking-D`: the player has enough money to buy D's formula.
+  - `vertical-adjacency`: E is unlocked.
+  - `catalysts`: F is unlocked.
+  - `extras-and-tips`: an order is completed with at least one extra topping. Handing in an imperfect item does not count until the whole order is in.
 
 #### Audio
 - The main theme (`Assets/Resources/Audio/BATWD_01_MainTheme.ogg`) loops in the background for the whole session. It fades in from silence over about 3 seconds when the game begins, and keeps playing when a new game starts.
@@ -163,14 +167,14 @@ Listed in product order, which is also the unlock order. Two rules keep the list
 | Product  | Name                                     | Price    | Condensed formula | Explicit node/edge formula |
 | -------- | ---------------------------------------- | -------- | ----------------- | -------------------------- |
 | A        | Everything bagel                         | 0        | no formula        |                            |
-| B        | Everything bagel + Cream cheese          | 5        | `A-A`             | `A A \| 0-1`               |
-| C (K3)   | Slice of wonderbread                     | 15       | `B-B`             | `B B \| 0-1`               |
-| D        | Everything everything bagel              | 20       | `A1-B-A-1`        | `A B A \| 0-1 1-2 0-2`     |
-| E (K2,3) | Croissant                                | 50       | `D<A>D`           | `D A D \| 0<1 1>2`         |
-| F        | Dharma bagel                             | 30       | `B-[C]-B`         | `B [C] B \| 0-1 1-2`       |
-| G        | Earth bagel                              | 75       | `F-B-F`           | `F B F \| 0-1 1-2`         |
-| H (W7)   | Na'an                                    | 100      | `B>G<B`           | `B G B \| 0>1 1<2`         |
-| I        | Black hole bagel                         | 150      | `F1>G<F-1`        | `F G F \| 0>1 1<2 0-2`     |
-| J        | Galaxy bagel                             | 400      | `D>G>[I]<G<D`     | `D G [I] G D \| 0>1 1>2 2<3 3<4` |
+| B        | Everything bagel + Cream cheese          | 2        | `A-A`             | `A A \| 0-1`               |
+| C (K3)   | Slice of wonderbread                     | 10       | `B-B`             | `B B \| 0-1`               |
+| D        | Everything everything bagel              | 50       | `A1-B-A-1`        | `A B A \| 0-1 1-2 0-2`     |
+| E (K2,3) | Croissant                                | 100       | `D<A>D`           | `D A D \| 0<1 1>2`         |
+| F        | Dharma bagel                             | 888       | `B-[C]-B`         | `B [C] B \| 0-1 1-2`       |
+| G        | Earth bagel                              | 1970       | `F-B-F`           | `F B F \| 0-1 1-2`         |
+| H (W7)   | Na'an                                    | 11500      | `B>G<B`           | `B G B \| 0>1 1<2`         |
+| I        | Black hole bagel                         | 197800      | `F1>G<F-1`        | `F G F \| 0>1 1<2 0-2`     |
+| J        | Galaxy bagel                             | 4297000      | `D>G>[I]<G<D`     | `D G [I] G D \| 0>1 1>2 2<3 3<4` |
 | K        | Bagel on a turtle on a bagel on a turtle | No price | `J1-J>F-F<J-J>F-F<1` | `J J F F J J F F \| 0-1 1>2 2-3 3<4 4-5 5>6 6-7 7<0` |
 | L        | True plain bagel                         | No price | `K>J>I(-G>F1(>D>B(-A)(-A))(>D>B(-A)(-A)))(-G>1)` | `K J I G G F D D A B A A B A \| 0>1 1>2 2-3 2-4 3>5 4>5 5>6 5>7 6>9 7>12 9-8 9-10 12-11 12-13` |

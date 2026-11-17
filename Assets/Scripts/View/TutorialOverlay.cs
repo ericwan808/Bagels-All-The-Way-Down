@@ -13,7 +13,9 @@ namespace Bagels.View
     /// the screen, and may point at something with a pulsing gold frame. A page either waits for a click anywhere on
     /// the screen (which only advances the text and reaches nothing else), or waits for the player to do what it asks (place an A, craft a B, ...) and moves on by itself.
     /// <para>
-    /// Steps run in order and start over with each new game. An overlay with no text in the file is skipped. The
+    /// Steps run in order and start over with each new game. After them come triggered overlays, each shown once a
+    /// game when its condition first holds (D affordable, E or F unlocked, an imperfect order completed), queued
+    /// behind whatever is showing. An overlay with no text in the file is skipped. The
     /// overlay hides while a popup is open, and conditions are checked only once animations have finished, so a
     /// page doesn't move on before the player has seen the result.
     /// </para>
@@ -37,17 +39,25 @@ namespace Bagels.View
         static readonly Color Gold = new Color(0.98f, 0.8f, 0.25f);
         static readonly Color Muted = new Color(0.85f, 0.78f, 0.68f);
 
-        /// <summary>One overlay: its id in the script, what it points at, and per page what ends it (null = a click).</summary>
+        /// <summary>
+        /// One overlay: its id in the script, what it points at, per page what ends it (null = a click), and for a
+        /// triggered overlay, what makes it show.
+        /// </summary>
         sealed class Step
         {
             public string Id;
             public Func<int, RectTransform> Highlight; // by page; may return null
             public Func<bool>[] Until = Array.Empty<Func<bool>>();
+            public Func<bool> When; // triggered overlays only
         }
 
         GameView view;
         TutorialScript script;
-        List<Step> steps;
+        List<Step> sequence, triggered;
+        /// <summary>What shows, in order: the fixed sequence, then each triggered overlay as it fires.</summary>
+        readonly List<Step> steps = new List<Step>();
+        /// <summary>Triggered overlays that haven't fired yet this game.</summary>
+        readonly List<Step> waiting = new List<Step>();
         GameSession session;
         Order firstOrder;
         int stepIndex;
@@ -61,7 +71,8 @@ namespace Bagels.View
         {
             view = gameView;
             script = LoadScript();
-            steps = BuildSteps();
+            sequence = BuildSteps();
+            triggered = BuildTriggeredSteps();
             BuildUi();
             Restart();
         }
@@ -139,14 +150,58 @@ namespace Bagels.View
             };
         }
 
+        /// <summary>
+        /// Overlays that show once per game, as soon as their condition first holds. One that fires while another
+        /// overlay is showing waits its turn. Their pages are clicked through.
+        /// </summary>
+        List<Step> BuildTriggeredSteps()
+        {
+            bool Unlocked(Symbol s) => session.Progress.IsUnlocked(s);
+            return new List<Step>
+            {
+                new Step
+                {
+                    Id = "unlocking-D",
+                    When = () => Unlocked(Symbol.D) || session.Rules.PriceOf(Symbol.D) is int price && session.Money >= price,
+                },
+                new Step { Id = "vertical-adjacency", When = () => Unlocked(Symbol.E) },
+                new Step { Id = "catalysts", When = () => Unlocked(Symbol.F) },
+                // Only once a whole order is in: an imperfect item alone doesn't cut the tip yet.
+                new Step { Id = "extras-and-tips", When = () => session.ImperfectOrdersCompleted > 0 },
+            };
+        }
+
         void Restart()
         {
             session = view.Session;
             firstOrder = session?.Orders.FirstOrDefault(o => !o.IsFinal);
+            steps.Clear();
+            steps.AddRange(sequence);
+            waiting.Clear();
+            waiting.AddRange(triggered);
             stepIndex = 0;
             pageIndex = 0;
             SkipEmptySteps();
             Show();
+        }
+
+        /// <summary>Queues every triggered overlay whose condition now holds, and shows it if nothing else is.</summary>
+        void FireTriggers()
+        {
+            if (session == null) return;
+            bool idle = Current == null;
+            for (int i = 0; i < waiting.Count; i++)
+            {
+                if (!waiting[i].When()) continue;
+                steps.Add(waiting[i]);
+                waiting.RemoveAt(i--);
+            }
+            if (idle && Current != null)
+            {
+                pageIndex = 0;
+                SkipEmptySteps();
+                Show();
+            }
         }
 
         Step Current => stepIndex < steps.Count ? steps[stepIndex] : null;
@@ -175,6 +230,7 @@ namespace Bagels.View
         {
             if (view == null || root == null) return;
             if (view.Session != session) Restart(); // a new game starts the tutorial over
+            if (!view.IsZooming) FireTriggers();
             if (Current == null)
             {
                 SetVisible(false);

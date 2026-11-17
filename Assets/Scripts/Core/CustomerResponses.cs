@@ -13,12 +13,15 @@ namespace Bagels.Core
     /// Perfect, just what I asked for!
     /// [1]
     /// Hm, there's something extra in here.
-    /// [5+]
+    /// [3-6]
+    /// This is getting crowded.
+    /// [7+]
     /// What is all this?
     /// </code>
     /// A header <c>[n]</c> starts the lines for orders with n extra toppings; its lines also cover every count up to
-    /// the next header, so <c>[5+]</c> (the + is optional) covers five or more. A count below the first header uses
-    /// the first header's lines. Blank lines and lines starting with # are ignored.
+    /// the next header, so <c>[7+]</c> (the + is optional) covers seven or more. A range like <c>[3-6]</c> starts at
+    /// its first number; the end is there for the reader, and the next header still decides where it stops. A count
+    /// below the first header uses the first header's lines. Blank lines and lines starting with # are ignored.
     /// </summary>
     public sealed class CustomerResponses
     {
@@ -58,9 +61,8 @@ namespace Bagels.Core
                 if (line.Length == 0 || line.StartsWith("#")) continue;
                 if (line.StartsWith("[") && line.EndsWith("]"))
                 {
-                    var number = line.Substring(1, line.Length - 2).Trim().TrimEnd('+').Trim();
-                    if (!int.TryParse(number, out int n) || n < 0)
-                        throw new FormatException($"Line {lineNumber}: \"{line}\" should be a header like [0], [1] or [5+].");
+                    if (!TryParseHeader(line.Substring(1, line.Length - 2), out int n))
+                        throw new FormatException($"Line {lineNumber}: \"{line}\" should be a header like [0], [3-6] or [7+].");
                     if (!result.lines.TryGetValue(n, out current)) result.lines[n] = current = new List<string>();
                     continue;
                 }
@@ -71,6 +73,18 @@ namespace Bagels.Core
             foreach (var key in result.lines.Where(kv => kv.Value.Count == 0).Select(kv => kv.Key).ToList())
                 result.lines.Remove(key);
             return result;
+        }
+
+        /// <summary>Reads a header's inside: "n", "n+" or "n-m" with m at least n. Gives the first number.</summary>
+        static bool TryParseHeader(string body, out int first)
+        {
+            var parts = body.Trim().TrimEnd('+').Split('-');
+            if (parts.Length > 2 || !int.TryParse(parts[0].Trim(), out first) || first < 0)
+            {
+                first = 0;
+                return false;
+            }
+            return parts.Length == 1 || int.TryParse(parts[1].Trim(), out int last) && last >= first;
         }
     }
 }
