@@ -102,7 +102,7 @@ public static class BagelsSetup
         var a = Pastry("A", "Everything bagel", Symbol.A, new Color(1f, 0.93f, 0.72f), LayoutKind.None, 0, true);
         var b = Pastry("B", "Everything bagel + Cream cheese", Symbol.B, new Color(0.96f, 0.75f, 0.40f), LayoutKind.None, 2, true);
         var c = Pastry("C", "Slice of wonderbread", Symbol.C, new Color(0.86f, 0.68f, 0.46f), LayoutKind.K3, 10, true, orderLevels: 1);
-        var d = Pastry("D", "Everything everything bagel", Symbol.D, new Color(0.78f, 0.42f, 0.22f), LayoutKind.None, 50);
+        var d = Pastry("D", "Everything everything bagel", Symbol.D, new Color(0.78f, 0.42f, 0.22f), LayoutKind.None, 25);
         var e = Pastry("E", "Croissant", Symbol.E, new Color(0.45f, 0.24f, 0.13f), LayoutKind.K23, 100, orderLevels: 2);
         var f = Pastry("F", "Dharma bagel", Symbol.F, new Color(0.62f, 0.80f, 0.55f), LayoutKind.None, 888);
         var g = Pastry("G", "Earth bagel", Symbol.G, new Color(0.40f, 0.62f, 0.78f), LayoutKind.None, 1970);

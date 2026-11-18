@@ -114,6 +114,13 @@ namespace Bagels.Core
     /// the components in <see cref="RewardComponents"/> and a tip in money. A perfect order earns the full
     /// <see cref="Tip"/>; each extra topping handed in makes it imperfect and cuts the tip (<see cref="TipAfter"/>).
     /// The components are given either way.
+    /// <para>
+    /// A priority order (<see cref="IsPriority"/>) has a timer: <see cref="PrioritySecondsFor"/> its item count. It is
+    /// worth <see cref="PriorityStartMultiplier"/> times a normal order's reward at first, falling steadily to
+    /// <see cref="PriorityEndMultiplier"/> times once <see cref="PriorityLateSeconds"/> are left, and staying there.
+    /// The extra value is all tip; the components are those of a normal order. When the timer runs out the customer
+    /// leaves (<see cref="IsExpired"/>).
+    /// </para>
     /// </summary>
     public sealed class Order
     {
@@ -123,16 +130,62 @@ namespace Bagels.Core
         /// <summary>From this many imperfections on, the tip is at its lowest share.</summary>
         public static readonly int ImperfectionsForLowestTip = TipShares.Length - 1;
 
+        /// <summary>A priority order starts out worth this many times a normal order's reward...</summary>
+        public const double PriorityStartMultiplier = 3.0;
+        /// <summary>...falling steadily to this many times...</summary>
+        public const double PriorityEndMultiplier = 2.0;
+        /// <summary>...once this many seconds are left, and staying there until the timer runs out.</summary>
+        public const double PriorityLateSeconds = 30.0;
+
+        /// <summary>The timer of a priority order with <paramref name="items"/> items: 1 minute for 2 items, 3 for 3.</summary>
+        public static double PrioritySecondsFor(int items) => items >= 3 ? 180.0 : 60.0;
+
         readonly bool[] filled;
+        readonly int baseTip;
 
         public int Id { get; }
         public IReadOnlyList<ItemSpec> Items { get; }
 
-        /// <summary>The reward's total value for a perfect order: the tip plus the price of each component given.</summary>
-        public int Reward { get; }
+        /// <summary>
+        /// The reward's total value for a perfect order: the tip plus the price of each component given. For a
+        /// priority order, what it is worth right now.
+        /// </summary>
+        public int Reward => IsPriority ? (int)Math.Round(BaseReward * RewardMultiplier) : BaseReward;
 
-        /// <summary>The tip a perfect order earns.</summary>
-        public int Tip { get; }
+        /// <summary>What the order would be worth as a normal order.</summary>
+        public int BaseReward { get; }
+
+        /// <summary>The tip a perfect order earns (for a priority order, right now).</summary>
+        public int Tip => baseTip + (Reward - BaseReward);
+
+        /// <summary>The timer a priority order started with, in seconds; null for a normal order.</summary>
+        public double? TimeLimit { get; }
+
+        /// <summary>Seconds left on a priority order's timer (0 once it has run out); infinite for a normal order.</summary>
+        public double TimeLeft { get; private set; }
+
+        /// <summary>True for an order with a timer and a bigger reward.</summary>
+        public bool IsPriority => TimeLimit != null;
+
+        /// <summary>True once a priority order's timer has run out: the customer leaves.</summary>
+        public bool IsExpired => IsPriority && TimeLeft <= 0;
+
+        /// <summary>
+        /// How many times a normal reward this order is worth now: 1 for a normal order. A priority order goes from
+        /// <see cref="PriorityStartMultiplier"/> down to <see cref="PriorityEndMultiplier"/> at
+        /// <see cref="PriorityLateSeconds"/> left.
+        /// </summary>
+        public double RewardMultiplier
+        {
+            get
+            {
+                if (!(TimeLimit is double limit)) return 1.0;
+                double span = limit - PriorityLateSeconds;
+                if (span <= 0 || TimeLeft <= PriorityLateSeconds) return PriorityEndMultiplier;
+                double t = Math.Min(1.0, (TimeLeft - PriorityLateSeconds) / span);
+                return PriorityEndMultiplier + (PriorityStartMultiplier - PriorityEndMultiplier) * t;
+            }
+        }
 
         /// <summary>Components given to the player's stock, each worth its price (bread comes empty).</summary>
         public IReadOnlyList<Symbol> RewardComponents { get; }
@@ -150,19 +203,34 @@ namespace Bagels.Core
         public Order(int id, IEnumerable<ItemSpec> items, int reward, bool isFinal = false)
             : this(id, items, reward, null, reward, isFinal) { }
 
-        /// <summary>An order worth <paramref name="reward"/> in all: <paramref name="components"/> plus a perfect tip of <paramref name="tip"/>.</summary>
-        public Order(int id, IEnumerable<ItemSpec> items, int reward, IEnumerable<Symbol> components, int tip, bool isFinal = false)
+        /// <summary>
+        /// An order worth <paramref name="reward"/> in all: <paramref name="components"/> plus a perfect tip of
+        /// <paramref name="tip"/>. With <paramref name="timeLimit"/> (seconds) it is a priority order, and those are
+        /// its values as a normal order.
+        /// </summary>
+        public Order(int id, IEnumerable<ItemSpec> items, int reward, IEnumerable<Symbol> components, int tip,
+                     bool isFinal = false, double? timeLimit = null)
         {
             Id = id;
             Items = items.ToArray();
             if (Items.Count == 0 || Items.Count > MaxItems)
                 throw new ArgumentException($"An order needs 1 to {MaxItems} items.");
             if (tip < 0 || tip > reward) throw new ArgumentException("The tip must be between 0 and the reward.");
-            Reward = reward;
-            Tip = tip;
+            if (timeLimit <= 0) throw new ArgumentException("A priority order's timer must be positive.");
+            if (isFinal && timeLimit != null) throw new ArgumentException("The final order has no timer.");
+            BaseReward = reward;
+            baseTip = tip;
             RewardComponents = (components ?? Enumerable.Empty<Symbol>()).ToArray();
             IsFinal = isFinal;
+            TimeLimit = timeLimit;
+            TimeLeft = timeLimit ?? double.PositiveInfinity;
             filled = new bool[Items.Count];
+        }
+
+        /// <summary>Runs a priority order's timer down by <paramref name="seconds"/>; a normal order has none.</summary>
+        internal void Tick(double seconds)
+        {
+            if (IsPriority && seconds > 0) TimeLeft = Math.Max(0, TimeLeft - seconds);
         }
 
         /// <summary>
@@ -219,7 +287,8 @@ namespace Bagels.Core
         }
 
         public override string ToString() =>
-            $"Order {Id}: {string.Join(" + ", Items)} for {RewardText()} (tip ${Tip}){(IsFinal ? " (final)" : "")}";
+            $"Order {Id}: {string.Join(" + ", Items)} for {RewardText()} (tip ${Tip}){(IsFinal ? " (final)" : "")}" +
+            (IsPriority ? $" (priority, {TimeLeft:0}s left)" : "");
     }
 
     /// <summary>
@@ -304,8 +373,17 @@ namespace Bagels.Core
 
         public Order Final(Symbol target) => new Order(nextId++, new[] { new ItemSpec(target) }, 0, isFinal: true);
 
-        /// <summary>A new order, or null if nothing priced is unlocked.</summary>
-        public Order Generate(Progression progress, Func<Symbol, bool> isActive)
+        /// <summary>Once priority orders have started, the chance that any new order is one.</summary>
+        public const double PriorityChance = 0.15;
+
+        /// <summary>A random roll: true with <see cref="PriorityChance"/>.</summary>
+        public bool RollPriority() => random.NextDouble() < PriorityChance;
+
+        /// <summary>
+        /// A new order, or null if nothing priced is unlocked. A priority order has 2 or 3 items, equally likely (so a
+        /// 2 or 5 minute timer), and is otherwise made like any other.
+        /// </summary>
+        public Order Generate(Progression progress, Func<Symbol, bool> isActive, bool priority = false)
         {
             // Items are drawn from unlocked, priced components. A on its own pays nothing, so it only appears as
             // bread contents.
@@ -317,10 +395,11 @@ namespace Bagels.Core
             for (int i = 0; i < available.Count; i++)
                 weights[available[i].Symbol] = RecencyWeight(available.Count - 1 - i);
 
+            int? fixedCount = priority ? 2 + random.Next(2) : (int?)null;
             for (int attempt = 0; attempt < Attempts; attempt++)
             {
                 int maxItems = Math.Min(Order.MaxItems, 1 + items.Count / 2);
-                int count = 1 + random.Next(maxItems);
+                int count = fixedCount ?? 1 + random.Next(maxItems);
                 var specs = new List<ItemSpec>();
                 int high = 0;
                 for (int k = 0; k < count; k++)
@@ -332,19 +411,21 @@ namespace Bagels.Core
                     specs.Add(spec);
                 }
                 int cost = specs.Sum(s => s.Cost(rules));
-                if (cost <= 0) continue;
-                return MakeOrder(specs, cost, items);
+                if (cost <= 0 || (fixedCount is int n && specs.Count != n)) continue;
+                return MakeOrder(specs, cost, items, priority);
             }
             var cheapest = items.OrderBy(i => i.Price).First();
-            return MakeOrder(new[] { new ItemSpec(cheapest.Symbol) }, cheapest.Price.Value, items);
+            var fallback = Enumerable.Repeat(new ItemSpec(cheapest.Symbol), fixedCount ?? 1).ToArray();
+            return MakeOrder(fallback, cheapest.Price.Value * fallback.Length, items, priority);
         }
 
-        Order MakeOrder(IReadOnlyList<ItemSpec> specs, int cost, List<PastryInfo> forSale)
+        Order MakeOrder(IReadOnlyList<ItemSpec> specs, int cost, List<PastryInfo> forSale, bool priority = false)
         {
             int reward = Reward(cost);
             var components = RewardComponents(reward, forSale);
             int tip = reward - components.Sum(s => rules.PriceOf(s).Value);
-            return new Order(nextId++, specs, reward, components, tip);
+            double? timer = priority ? Order.PrioritySecondsFor(specs.Count) : (double?)null;
+            return new Order(nextId++, specs, reward, components, tip, timeLimit: timer);
         }
 
         /// <summary>

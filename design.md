@@ -72,13 +72,20 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
     - Given components go into the player's stock (see Money and purchasing). They are given even when the order is imperfect.
   - **Tip**: the rest of the reward's value is paid as money. A perfect order earns the full tip. An imperfect order earns 90% of it with 1 extra topping, 70% with 2, 50% with 3 to 6, and 10% with 7 or more.
   - In the early game, when no component can be given, the whole reward is the tip.
-  - The tip amount is never shown in advance. An order card shows only an icon for each component it gives, with "xN" when it gives more than one.
+  - The tip amount is never shown in advance. An order card shows only "Rewards:" and an icon for each component it gives, with "xN" when it gives more than one, above a thin line that separates the rewards from the order's items. An order that gives no components has neither.
 - **Customer response**: when an order is completed, a small text box with the customer's reaction pops up in the top-right corner of the board, next to the orders panel. It fades in quickly, lingers for about 3 seconds, then fades out. The line is picked at random from those written for that many extra toppings, in `Assets/Resources/CustomerResponses.txt`.
   - Along with the text box, the tip appears as a small green "+$amount" beside the box that fades in, floats up to the top of the screen, and disappears after about a second. An order that earns no tip shows a red "+0".
 - The game starts with 1 order, and at most 3 orders are active at a time.
 - When an order is fulfilled, a replacement order is generated right away. If fewer than 3 orders are active after that, one more is added.
+- **Priority orders**: an order with a timer and a bigger reward.
+  - Once D's formula is unlocked, one priority order appears straight away, on top of the orders already active (so the docket can briefly hold 4). After that, every new order has a 15% chance to be a priority order.
+  - A priority order has 2 or 3 items, equally likely. Its timer is 1 minute with 2 items and 3 minutes with 3.
+  - It is worth 3 times what the same order would be worth normally when it appears. The multiplier falls steadily to 2 times when 30 seconds are left, and stays at 2 times until the timer runs out. The components are those of a normal order; all the extra value is tip, and extra toppings cut it as usual. The tip paid is the one at the moment the last item goes in.
+  - When the timer runs out, the customer leaves: the order is removed, along with anything already handed in, and is replaced like a fulfilled order.
+  - The timer pauses while a popup or a tutorial overlay is showing.
+  - Its card is tinted and shows "VIP", the time left (in red for the last 30 seconds). Priority orders sit at the top of the docket, below the final order.
 - The orders panel lists orders as a docket, with the final order (once it appears) always at the top. When an order is fulfilled, its card fades away slowly. Then the orders below it slide up smoothly, and the new order fades in at the bottom.
-- An order card draws each item the way it will look on the board: a bread is drawn with its toppings inside its slots. A card shows one layer of toppings. For example, a C with a B and an A shows as a C holding a B and an A. When an item's toppings have toppings of their own, those nested breads are drawn empty, and a small + button next to the item opens a popup with every layer. For example, an H holding an E that holds an A shows on the card as an H holding an empty E, and the popup shows the H holding the E, with the E holding the A on its own row below. In the popup, each bread that has toppings gets its own row, drawn with its direct toppings inside it and indented under its parent's row.
+- An order card draws each item the way it will look on the board: a bread is drawn with its toppings inside its slots. A card shows one layer of toppings. For example, a C with a B and an A shows as a C holding a B and an A. When an item's toppings have toppings of their own, those nested breads are drawn empty. Every bread item with toppings has a small + button next to it that opens a popup with every layer, even when there is only one. For example, an H holding an E that holds an A shows on the card as an H holding an empty E, and the popup shows the H holding the E, with the E holding the A on its own row below. In the popup, each bread that has toppings gets its own row, drawn with its direct toppings inside it and indented under its parent's row. The popup has no title, only a close button, and is drawn large: rows 272 px tall with 248 px bread icons. It shrinks only as far as needed for a deep order to fit on screen.
 - For recursion in orders, Cs are limited to one level of recusion (they must directly hold bagels or nothing, not breads), Es can have two levels, and Hs can have three. This counts from the top-most level.
 - Each bread also limits which toppings an order may ask for in it. A bread may still be ordered empty. These limits apply to every bread of that type, at any level of nesting. They only cover what the order asks for, not extra toppings the player adds:
   - A C holds exactly one of these sets as its direct contents: A, B+A, D, D+A, D+B or F. This only counts the C's own toppings.
@@ -100,7 +107,7 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 - The formulas are split across multiple pages instead of one scrolling list.
 - Each formula's product icon can be dragged onto the board to buy that component. The panel also has an A icon that spawns a free A to drag onto the board.
 - A greyed-out rectangle stands in for the next component to unlock. For a formula that is bought, it has a buy button showing the price, dimmed until the player can afford it. For one that unlocks by crafting, it says what to craft.
-- The top-left corner has two small buttons: a menu button (no menu yet) and a "?" help button. The help button opens a popup over the screen with the controls (opening boards, getting free As and buying components, handing items to orders) and the legend for reading a formula. Clicking outside the popup, its close button or Escape closes it.
+- The top-left corner has two small buttons: a menu button (no menu yet) and a "?" help button. The help button opens a popup over the screen with the controls (opening boards, getting free As and buying components, handing items to orders) and the legend for reading a formula. The legend's vertical adjacency row has a + button that plays the tutorial's vertical adjacency video in its corner window (see Tutorial). Clicking outside the popup, its close button or Escape closes it.
 - When a formula unlocks, the grey box wipes away to reveal it: the formula fades in and its product pops into place. The panel does not turn the page by itself. If the new formula is on a page the player isn't viewing, that page's arrow button pulses, and the reveal plays when the player turns to it.
 
 #### Board navigation
@@ -112,11 +119,11 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
 
 #### Tutorial
 - A new game starts with a tutorial: a series of overlays whose text lives in `Assets/Resources/TutorialOverlays.txt`, one `[id]` header per overlay and one line per page. An overlay with no text is skipped.
-- Each page shows in a box at the top centre of the screen. A page either waits for a click on the box, or waits for the player to do what it asks and then moves on by itself. Some overlays also point at something with a pulsing gold frame. The tutorial hides while a popup is open.
+- Each page shows in a box at the top centre of the screen. A page either waits for a click on the box, or waits for the player to do what it asks and then moves on by itself. While a page waits for a click, the rest of the screen is darkened to draw the eye to the text. Some overlays also point at something with a pulsing gold frame. The tutorial hides while a popup is open.
 - The first order of every game is a B and a C holding an A, so the tutorial can walk through making them.
 - The overlays, in order:
   - `welcome`: click through.
-  - `place-a`: frames the free A in the side panel; moves on once something is on the board.
+  - `place-a`: frames the free A in the side panel. The first page is clicked through; the second moves on once something is on the board.
   - `first-formula`: frames the formula for B; moves on once a B is crafted.
   - `first-formula-complete`: click through.
   - `recursive-breads`: frames the formula for C; moves on once a C is crafted.
@@ -125,7 +132,9 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
   - `hand-in`: the first page frames the first order and moves on once it is complete; the second is clicked through.
 - Some overlays are not in the sequence: each shows once per game, the first time its condition holds, and waits its turn if another overlay is showing. Their pages are clicked through.
   - `unlocking-D`: the player has enough money to buy D's formula.
-  - `vertical-adjacency`: E is unlocked.
+  - `priority-order`: a priority order is on the docket (the first one turns up as soon as D is unlocked). It frames that order's card.
+  - `creating-D`: the first D is crafted by its formula (buying one does not count).
+  - `vertical-adjacency`: E is unlocked. Once it is clicked through, `Assets/Resources/vertical_adjacency_example.mp4` loops, muted, in a small window in the lower right of the board (just left of the orders panel) until the player closes it with its X button.
   - `catalysts`: F is unlocked.
   - `extras-and-tips`: an order is completed with at least one extra topping. Handing in an imperfect item does not count until the whole order is in.
 
@@ -169,7 +178,7 @@ Listed in product order, which is also the unlock order. Two rules keep the list
 | A        | Everything bagel                         | 0        | no formula        |                            |
 | B        | Everything bagel + Cream cheese          | 2        | `A-A`             | `A A \| 0-1`               |
 | C (K3)   | Slice of wonderbread                     | 10       | `B-B`             | `B B \| 0-1`               |
-| D        | Everything everything bagel              | 50       | `A1-B-A-1`        | `A B A \| 0-1 1-2 0-2`     |
+| D        | Everything everything bagel              | 25       | `A1-B-A-1`        | `A B A \| 0-1 1-2 0-2`     |
 | E (K2,3) | Croissant                                | 100       | `D<A>D`           | `D A D \| 0<1 1>2`         |
 | F        | Dharma bagel                             | 888       | `B-[C]-B`         | `B [C] B \| 0-1 1-2`       |
 | G        | Earth bagel                              | 1970       | `F-B-F`           | `F B F \| 0-1 1-2`         |

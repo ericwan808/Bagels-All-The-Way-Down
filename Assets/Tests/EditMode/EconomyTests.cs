@@ -14,7 +14,7 @@ namespace Bagels.Core.Tests
             (Symbol.A, "Everything bagel", 0, null),
             (Symbol.B, "Everything bagel + Cream cheese", 2, "A-A"),
             (Symbol.C, "Slice of wonderbread", 10, "B-B"),
-            (Symbol.D, "Everything everything bagel", 50, "A1-B-A-1"),
+            (Symbol.D, "Everything everything bagel", 25, "A1-B-A-1"),
             (Symbol.E, "Croissant", 100, "D<A>D"),
             (Symbol.F, "Dharma bagel", 888, "B-[C]-B"),
             (Symbol.G, "Earth bagel", 1970, "F-B-F"),
@@ -29,7 +29,7 @@ namespace Bagels.Core.Tests
         const int Everything = 10_000_000;
 
         /// <summary>Budgets that unlock up to: nothing new, D, E, F, H, and J.</summary>
-        static readonly int[] Stages = { 0, 50, 100, 888, 11500, 4297000 };
+        static readonly int[] Stages = { 0, 25, 100, 888, 11500, 4297000 };
 
         public static Rules FullRules()
         {
@@ -85,8 +85,8 @@ namespace Bagels.Core.Tests
         [Test]
         public void Formulas_AreBoughtInListOrder_ForTheirComponentsPrice()
         {
-            Assert.AreEqual(50, session.Progress.NextFormulaPrice, "D's formula costs what a D costs");
-            session.GrantMoney(49);
+            Assert.AreEqual(25, session.Progress.NextFormulaPrice, "D's formula costs what a D costs");
+            session.GrantMoney(24);
             Assert.IsFalse(session.CanBuyNextFormula);
             Assert.Throws<InvalidOperationException>(() => session.BuyNextFormula());
             session.GrantMoney(1);
@@ -121,9 +121,9 @@ namespace Bagels.Core.Tests
         [Test]
         public void BuyingAFormula_IsNotTakenBackByUndo_NorRefunded()
         {
-            session.GrantMoney(52);
+            session.GrantMoney(27);
             session.Place(root, 0, Symbol.B); // $2
-            session.BuyNextFormula();         // D, $50
+            session.BuyNextFormula();         // D, $25
             Assert.AreEqual(0, session.Money);
             session.Undo();
             Assert.AreEqual(2, session.Money, "undo refunds the B only");

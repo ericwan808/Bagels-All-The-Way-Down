@@ -43,6 +43,19 @@ namespace Bagels.Core
         Dictionary<Symbol, int> stock = new Dictionary<Symbol, int>();
         readonly OrderGenerator generator;
         bool finalOrderAdded;
+        bool firstPriorityAdded;
+
+        /// <summary>
+        /// Priority orders start once this formula is unlocked: one straight away, then any new order is one with
+        /// <see cref="OrderGenerator.PriorityChance"/>.
+        /// </summary>
+        public const Symbol PriorityUnlock = Symbol.D;
+
+        /// <summary>True once priority orders can turn up.</summary>
+        public bool PriorityOrdersStarted => Progress.IsUnlocked(PriorityUnlock);
+
+        /// <summary>Priority orders whose timer ran out before they were completed, over the whole game.</summary>
+        public int ExpiredOrders { get; private set; }
 
         public Rules Rules { get; }
         public GameState State { get; private set; }
@@ -103,7 +116,7 @@ namespace Bagels.Core
             // A snapshot's money is at least the money now (placements since then only spent), so this stays >= 0.
             for (int i = 0; i < undo.Count; i++) undo[i] = (undo[i].state, undo[i].money - price, undo[i].stock);
             var gained = Progress.Purchase();
-            CheckFinalOrder();
+            CheckSpecialOrders();
             LastUnlocked = gained;
         }
 
@@ -210,17 +223,57 @@ namespace Bagels.Core
             }
 
             // The orders below move up, and the replacement joins the bottom of the docket.
-            AddOrder();
-            if (RegularOrderCount < MaxOrders) AddOrder();
+            Replenish();
             return DeliveryOutcome.Completed;
+        }
+
+        /// <summary>
+        /// Runs the priority orders' timers down by <paramref name="seconds"/> of play. An order whose timer runs out
+        /// leaves, with anything already handed in, and is replaced like a completed one. Returns the orders that left.
+        /// </summary>
+        public IReadOnlyList<Order> Tick(double seconds)
+        {
+            if (Won || seconds <= 0) return Array.Empty<Order>();
+            var expired = new List<Order>();
+            foreach (var order in orders)
+            {
+                order.Tick(seconds);
+                if (order.IsExpired) expired.Add(order);
+            }
+            foreach (var order in expired)
+            {
+                orders.Remove(order);
+                ExpiredOrders++;
+                Replenish();
+            }
+            return expired;
         }
 
         int RegularOrderCount => orders.Count(o => !o.IsFinal);
 
-        void AddOrder()
+        /// <summary>
+        /// After an order leaves: a replacement, plus one more while fewer than <see cref="MaxOrders"/> are active.
+        /// Neither if the docket is already full (the first priority order can make it one over).
+        /// </summary>
+        void Replenish()
         {
-            var order = generator.Generate(Progress, IsFormulaUnlocked);
+            if (RegularOrderCount < MaxOrders) AddOrder();
+            if (RegularOrderCount < MaxOrders) AddOrder();
+        }
+
+        void AddOrder(bool? priority = null)
+        {
+            bool isPriority = priority ?? (PriorityOrdersStarted && generator.RollPriority());
+            var order = generator.Generate(Progress, IsFormulaUnlocked, isPriority);
             if (order != null) orders.Add(order);
+        }
+
+        /// <summary>The first priority order turns up as soon as <see cref="PriorityUnlock"/> is unlocked.</summary>
+        void CheckPriorityOrder()
+        {
+            if (firstPriorityAdded || Won || !PriorityOrdersStarted) return;
+            firstPriorityAdded = true;
+            AddOrder(priority: true);
         }
 
         /// <summary>For tests: adds money (or, with 0, just re-checks crafting unlocks) as if an order had paid it.</summary>
@@ -234,7 +287,7 @@ namespace Bagels.Core
         internal void UnlockUpTo(int budget)
         {
             LastUnlocked = Progress.UnlockUpTo(budget);
-            CheckFinalOrder();
+            CheckSpecialOrders();
         }
 
         /// <summary>For tests: adds a hand-made order to the active ones.</summary>
@@ -251,10 +304,10 @@ namespace Bagels.Core
         void RefreshUnlocks()
         {
             LastUnlocked = Progress.Update();
-            CheckFinalOrder();
+            CheckSpecialOrders();
         }
 
-        void CheckFinalOrder()
+        void CheckSpecialOrders()
         {
             // As soon as the target's formula is unlocked, a special order asks for it alone.
             if (!finalOrderAdded && Rules.Target is Symbol target && Progress.IsUnlocked(target))
@@ -262,6 +315,7 @@ namespace Bagels.Core
                 finalOrderAdded = true;
                 orders.Add(generator.Final(target));
             }
+            CheckPriorityOrder();
         }
     }
 }

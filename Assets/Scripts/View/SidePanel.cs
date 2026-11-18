@@ -32,7 +32,7 @@ namespace Bagels.View
         /// Bump whenever <see cref="Build"/> changes what the fixed skeleton contains, so a panel saved in the scene by
         /// older code is noticed (<see cref="IsOutdated"/>) and rebuilt instead of silently showing the old layout.
         /// </summary>
-        public const int LayoutVersion = 3;
+        public const int LayoutVersion = 4;
 
         public const float Width = 440f;
         public const float RightWidth = 400f;
@@ -56,6 +56,7 @@ namespace Bagels.View
 
         static readonly Color Background = new Color(0.24f, 0.17f, 0.12f);
         static readonly Color Card = new Color(0.32f, 0.23f, 0.17f);
+        static readonly Color PriorityCard = new Color(0.42f, 0.27f, 0.12f);
         static readonly Color CardGood = new Color(0.25f, 0.45f, 0.22f);
         static readonly Color CardBad = new Color(0.55f, 0.2f, 0.17f);
         static readonly Color Locked = new Color(0.42f, 0.38f, 0.35f, 0.6f);
@@ -80,6 +81,7 @@ namespace Bagels.View
         [SerializeField] Button helpButton;
         [SerializeField] Button helpClose;
         [SerializeField] Button helpBackdrop;
+        [SerializeField] Button adjacencyVideoButton;
         [SerializeField] GameObject help;
         [SerializeField] GameObject menu;
         [SerializeField] Button menuClose;
@@ -107,6 +109,8 @@ namespace Bagels.View
 
         readonly List<(Order order, RectTransform card, Image background)> cards =
             new List<(Order, RectTransform, Image)>();
+        /// <summary>The countdown on each priority order's card, updated every frame.</summary>
+        readonly List<(Order order, Text label)> timers = new List<(Order, Text)>();
         RectTransform panel;
         float cursor;
         bool hooked;
@@ -209,6 +213,7 @@ namespace Bagels.View
             float glow = 0.5f + 0.5f * Mathf.Sin(UiTween.Now * PulseSpeed);
             Pulse(prevPage, newOnEarlierPage, glow);
             Pulse(nextPage, newOnLaterPage, glow);
+            foreach (var (order, label) in timers) ShowTimer(order, label);
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             {
                 if (toppings != null) CloseToppings();
@@ -222,6 +227,10 @@ namespace Bagels.View
         public bool HelpOpen => help != null && help.activeSelf;
 
         void ToggleHelp() { if (help != null) help.SetActive(!help.activeSelf); }
+
+        /// <summary>Plays the vertical adjacency video from the tutorial in the corner window again.</summary>
+        void ShowAdjacencyVideo() =>
+            TutorialVideo.Open(view.transform, TutorialOverlay.VerticalAdjacencyVideo, TutorialOverlay.VerticalAdjacencyVideoTitle);
         void CloseHelp() { if (help != null) help.SetActive(false); }
 
         // ------------------------------------------------------------ menu
@@ -252,6 +261,7 @@ namespace Bagels.View
             if (nextPage != null) nextPage.onClick.AddListener(NextPage);
             if (helpButton != null) helpButton.onClick.AddListener(ToggleHelp);
             if (helpClose != null) helpClose.onClick.AddListener(CloseHelp);
+            if (adjacencyVideoButton != null) adjacencyVideoButton.onClick.AddListener(ShowAdjacencyVideo);
             if (helpBackdrop != null) helpBackdrop.onClick.AddListener(CloseHelp);
             if (menuButton != null) menuButton.onClick.AddListener(ToggleMenu);
             if (menuClose != null) menuClose.onClick.AddListener(CloseMenu);
@@ -277,6 +287,7 @@ namespace Bagels.View
             if (nextPage != null) nextPage.onClick.RemoveListener(NextPage);
             if (helpButton != null) helpButton.onClick.RemoveListener(ToggleHelp);
             if (helpClose != null) helpClose.onClick.RemoveListener(CloseHelp);
+            if (adjacencyVideoButton != null) adjacencyVideoButton.onClick.RemoveListener(ShowAdjacencyVideo);
             if (helpBackdrop != null) helpBackdrop.onClick.RemoveListener(CloseHelp);
             if (menuButton != null) menuButton.onClick.RemoveListener(ToggleMenu);
             if (menuClose != null) menuClose.onClick.RemoveListener(CloseMenu);
@@ -321,8 +332,10 @@ namespace Bagels.View
         {
             highlighted = order;
             foreach (var (o, _, bg) in cards)
-                if (bg != null) bg.color = o != order ? Card : fits ? CardGood : CardBad;
+                if (bg != null) bg.color = o != order ? CardColor(o) : fits ? CardGood : CardBad;
         }
+
+        static Color CardColor(Order order) => order.IsPriority ? PriorityCard : Card;
 
         // ------------------------------------------------------------ customer response
 
@@ -476,7 +489,7 @@ namespace Bagels.View
 
             HelpSection("Boards", "Scroll up on a board to open it, down to go back.", 24f);
             HelpSection("Building",
-                $"Free: click or drag an {level.Basic.Symbol} onto a slot, or double-click a slot. " +
+                $"Click and drag an {level.Basic.Symbol} onto a slot, or double-click a slot. " +
                 "Drag a formula's product to buy it.", 44f);
             HelpSection("Orders",
                 "Drag items from the board onto an order. Extra toppings in bread are accepted but cut the tip.", 44f);
@@ -507,8 +520,11 @@ namespace Bagels.View
             float width = size.x - 2 * Pad;
             var top = UiFactory.Rect($"{name} Title", box.rectTransform, Vector2.zero);
             Place(top, new Vector2(Pad, Pad), new Vector2(width, IconButton));
-            var title = UiFactory.Text("Title", top, heading, 26, ViewColors.Paper, TextAnchor.MiddleLeft, FontStyle.Bold);
-            Place(title.rectTransform, Vector2.zero, new Vector2(width - IconButton, IconButton));
+            if (!string.IsNullOrEmpty(heading))
+            {
+                var title = UiFactory.Text("Title", top, heading, 26, ViewColors.Paper, TextAnchor.MiddleLeft, FontStyle.Bold);
+                Place(title.rectTransform, Vector2.zero, new Vector2(width - IconButton, IconButton));
+            }
             close = BuildButton(top, "×", new Vector2(width - IconButton, 0f), new Vector2(IconButton, IconButton), out _);
             close.name = "Close Button";
             return box.rectTransform;
@@ -570,7 +586,15 @@ namespace Bagels.View
                         break;
                 }
                 var label = UiFactory.Text("Legend Text", block, text, 16, Muted);
-                Place(label.rectTransform, new Vector2(sampleW + 18f, rowH * i), new Vector2(width - sampleW - 18f, rowH));
+                Place(label.rectTransform, new Vector2(sampleW + 18f, rowH * i), new Vector2(width - sampleW - 18f - PlusSize, rowH));
+                if (i == 1)
+                {
+                    // "+" replays the tutorial's video of vertical adjacency.
+                    adjacencyVideoButton = BuildButton(block, "+", new Vector2(width - PlusSize, rowH * i + (rowH - PlusSize) * 0.5f),
+                                                       new Vector2(PlusSize, PlusSize), out var plusLabel);
+                    adjacencyVideoButton.name = "Adjacency Video Button";
+                    plusLabel.fontSize = 20;
+                }
             }
         }
 
@@ -857,17 +881,18 @@ namespace Bagels.View
                     if (session.Orders.Contains(order)) drawnAt[order.Id] = card.anchoredPosition;
                     else
                     {
-                        FadeAway(card, bg, now);
+                        FadeAway(card, bg, now, order.IsExpired);
                         slideAt = Mathf.Max(slideAt, now + CardFadeTime);
                     }
                 }
             Clear(ordersRoot);
             cards.Clear();
+            timers.Clear();
             float width = ordersRoot.rect.width > 0 ? ordersRoot.rect.width : RightWidth - 2 * Pad;
             float y = 0f;
             float moveStart = Mathf.Max(now, slideAt);
-            // The final order first: it is the goal.
-            foreach (var order in session.Orders.OrderByDescending(o => o.IsFinal))
+            // The final order first: it is the goal. Then priority orders, which are racing a timer.
+            foreach (var order in session.Orders.OrderByDescending(o => o.IsFinal).ThenByDescending(o => o.IsPriority))
             {
                 y += BuildOrderCard(order, y, width) + Gap * 2f;
                 var card = cards[cards.Count - 1].card;
@@ -901,9 +926,10 @@ namespace Bagels.View
         }
 
         /// <summary>
-        /// Moves a finished order's card to a layer the rebuild leaves alone, tints it green and fades it out.
+        /// Moves a finished order's card to a layer the rebuild leaves alone, tints it green (red if its customer left
+        /// when the timer ran out) and fades it out.
         /// </summary>
-        void FadeAway(RectTransform card, Image background, float now)
+        void FadeAway(RectTransform card, Image background, float now, bool expired = false)
         {
             if (fadingRoot == null)
             {
@@ -919,7 +945,7 @@ namespace Bagels.View
             if (background != null)
             {
                 background.raycastTarget = false;
-                background.color = CardGood;
+                background.color = expired ? CardBad : CardGood;
             }
             UiTween.On(card, now, CardFadeTime).Fade(1f, 0f).Scale(Vector3.one, new Vector3(0.94f, 0.94f, 1f)).DestroyWhenDone();
         }
@@ -929,7 +955,7 @@ namespace Bagels.View
             var rowHeights = order.Items.Select(ItemRowHeight).ToList();
             float height = 36f + rowHeights.Sum() + 8f;
             float plusX = width - 20f - PlusSize;
-            var bg = UiFactory.Image($"Order {order.Id}", ordersRoot, null, Card, Vector2.zero);
+            var bg = UiFactory.Image($"Order {order.Id}", ordersRoot, null, CardColor(order), Vector2.zero);
             bg.raycastTarget = true;
             var card = bg.rectTransform;
             Place(card, new Vector2(0f, y), new Vector2(width, height));
@@ -941,6 +967,15 @@ namespace Bagels.View
                 var header = UiFactory.Text("Header", card, "FINAL ORDER: deliver it to win", 18, Gold,
                                             TextAnchor.MiddleLeft, FontStyle.Bold);
                 Place(header.rectTransform, new Vector2(10f, 4f), new Vector2(width - 70f, 28f));
+            }
+            else if (order.IsPriority)
+            {
+                // The reward icons share the header with the countdown, which is updated every frame.
+                BuildRewardHeader(card, order, width - 70f - PriorityTimerWidth);
+                var timer = UiFactory.Text("Timer", card, "", 16, Gold, TextAnchor.MiddleRight, FontStyle.Bold);
+                Place(timer.rectTransform, new Vector2(width - 64f - PriorityTimerWidth, 4f), new Vector2(PriorityTimerWidth, 28f));
+                timers.Add((order, timer));
+                ShowTimer(order, timer);
             }
             else BuildRewardHeader(card, order, width - 70f);
             var progress = UiFactory.Text("Progress", card, $"{filled}/{order.Items.Count}", 16, Muted, TextAnchor.MiddleRight);
@@ -954,9 +989,9 @@ namespace Bagels.View
                 var row = UiFactory.Rect($"Item {i}", card, Vector2.zero);
                 Place(row, new Vector2(10f, rowTop), new Vector2(width - 20f, rowHeight));
                 float x = BuildItem(row, item, rowHeight);
-                if (IsComplex(item) && !order.IsFilled(i))
+                if (HasToppings(item) && !order.IsFilled(i))
                 {
-                    // The card shows one layer of toppings; "+" shows every layer in a popup.
+                    // "+" shows the item's toppings, every layer of them, in a bigger popup.
                     var plus = BuildButton(row, "+", new Vector2(plusX, (rowHeight - PlusSize) * 0.5f),
                                            new Vector2(PlusSize, PlusSize), out var plusLabel);
                     plus.name = "Toppings Button";
@@ -980,15 +1015,37 @@ namespace Bagels.View
         }
 
         const float RewardIcon = 24f;
+        const float PriorityTimerWidth = 90f;
+
+        /// <summary>A priority order's countdown, e.g. "VIP 4:32", red for the last 30 seconds.</summary>
+        static void ShowTimer(Order order, Text label)
+        {
+            if (label == null) return;
+            int seconds = Mathf.CeilToInt((float)order.TimeLeft);
+            label.text = $"VIP {seconds / 60}:{seconds % 60:00}";
+            label.color = order.TimeLeft <= Order.PriorityLateSeconds ? TipRed : Gold;
+        }
+
+        const float RewardsLabelWidth = 72f;
+        static readonly Color Divider = new Color(0.85f, 0.78f, 0.68f, 0.35f);
 
         /// <summary>
-        /// The card's header: an icon for each kind of component the order gives, with "xN" when it gives more than
-        /// one, then how many extra toppings have been handed in so far.
+        /// The card's header: for an order that gives components, "Rewards:" and an icon for each kind it gives, with
+        /// "xN" when it gives more than one, over a line that sets them apart from the items. Then how many extra
+        /// toppings have been handed in so far.
         /// </summary>
         void BuildRewardHeader(RectTransform card, Order order, float maxWidth)
         {
             const float top = 4f, height = 28f;
             float x = 10f, right = 10f + maxWidth;
+            if (order.RewardComponents.Count > 0)
+            {
+                var label = UiFactory.Text("Rewards Label", card, "Rewards:", 16, Muted, TextAnchor.MiddleLeft);
+                Place(label.rectTransform, new Vector2(x, top), new Vector2(RewardsLabelWidth, height));
+                x += RewardsLabelWidth;
+                var line = UiFactory.Image("Rewards Divider", card, null, Divider, Vector2.zero);
+                Place(line.rectTransform, new Vector2(10f, top + height + 1f), new Vector2(card.rect.width - 20f, 1.5f));
+            }
             foreach (var group in order.RewardComponents.GroupBy(s => s).OrderByDescending(g => g.Key))
             {
                 if (x + RewardIcon > right) break;
@@ -1016,8 +1073,8 @@ namespace Bagels.View
 
         const float PlusSize = 26f;
 
-        /// <summary>An item whose toppings have toppings of their own, which the card collapses (see <see cref="ShowToppings"/>).</summary>
-        static bool IsComplex(ItemSpec spec) => spec.Contents.Any(c => c.Contents.Count > 0);
+        /// <summary>A bread with toppings, which "+" opens in a popup (see <see cref="ShowToppings"/>).</summary>
+        static bool HasToppings(ItemSpec spec) => spec.Contents.Count > 0;
 
         /// <summary>
         /// Draws an item as it looks on the board, with one layer of toppings inside it: a bread shows its toppings in
@@ -1033,15 +1090,21 @@ namespace Bagels.View
 
         // ------------------------------------------------------------ toppings popup
 
+        // The toppings popup's layout at normal size; it is drawn at ToppingScale times that, or smaller if a deep
+        // order wouldn't fit on screen.
         const float ToppingRow = 136f;
         const float ToppingIcon = 124f;
         const float ToppingIndent = 90f;
+        const float ToppingNameWidth = 180f;
+        const float ToppingScale = 2f;
+        const float ToppingMargin = 40f; // kept clear between the popup and the screen's top and bottom
         GameObject toppings;
 
         /// <summary>
         /// Opens a popup with every layer of <paramref name="item"/>'s toppings: one row per bread that has toppings,
         /// each drawn as on the board with its direct toppings inside it. Each nested bread's row is indented below
-        /// its parent's and joined to it by a line, so the innermost toppings show in their own layer.
+        /// its parent's and joined to it by a line, so the innermost toppings show in their own layer. It has no
+        /// title, only a close button, and is drawn at <see cref="ToppingScale"/> times the normal size.
         /// </summary>
         void ShowToppings(ItemSpec item)
         {
@@ -1056,11 +1119,13 @@ namespace Bagels.View
             }
             Collect(item, 0, -1);
 
-            float contentWidth = layers.Max(l => l.depth * ToppingIndent) + ToppingIcon + 200f;
             float top = Pad + IconButton + Gap;
-            var size = new Vector2(Mathf.Max(360f, contentWidth + 2 * Pad), top + layers.Count * ToppingRow + Pad);
-            var box = BuildPopup("Toppings", size, view.TypeOf(item.Symbol)?.DisplayName ?? item.Symbol.ToString(),
-                                 out toppings, out var backdrop, out var close);
+            float fit = (ReferenceHeight - 2 * ToppingMargin - top - Pad) / (layers.Count * ToppingRow);
+            float k = Mathf.Min(ToppingScale, fit);
+            float row = ToppingRow * k, iconSize = ToppingIcon * k, indent = ToppingIndent * k;
+            float contentWidth = layers.Max(l => l.depth * indent) + iconSize + (ToppingNameWidth + 20f) * k;
+            var size = new Vector2(Mathf.Max(360f * k, contentWidth + 2 * Pad), top + layers.Count * row + Pad);
+            var box = BuildPopup("Toppings", size, null, out toppings, out var backdrop, out var close);
             backdrop.onClick.AddListener(CloseToppings);
             close.onClick.AddListener(CloseToppings);
 
@@ -1069,21 +1134,21 @@ namespace Bagels.View
             for (int i = 0; i < layers.Count; i++)
             {
                 var (spec, depth, parent) = layers[i];
-                float x = depth * ToppingIndent;
-                float cy = -(i + 0.5f) * ToppingRow;
+                float x = depth * indent;
+                float cy = -(i + 0.5f) * row;
                 if (parent >= 0)
                 {
                     // From under the parent bread's icon down to this row, then across to this bread.
-                    float px = layers[parent].depth * ToppingIndent + ToppingIcon * 0.5f;
-                    float py = -(parent + 0.5f) * ToppingRow - ToppingIcon * 0.5f;
-                    UiFactory.Line(origin, new Vector2(px, py), new Vector2(px, cy), 3f, Muted);
-                    UiFactory.Line(origin, new Vector2(px, cy), new Vector2(x, cy), 3f, Muted);
+                    float px = layers[parent].depth * indent + iconSize * 0.5f;
+                    float py = -(parent + 0.5f) * row - iconSize * 0.5f;
+                    UiFactory.Line(origin, new Vector2(px, py), new Vector2(px, cy), 3f * k, Muted);
+                    UiFactory.Line(origin, new Vector2(px, cy), new Vector2(x, cy), 3f * k, Muted);
                 }
-                var icon = UiFactory.ItemIcon(origin, spec, ToppingIcon, view, 1);
-                At(icon, new Vector2(x + ToppingIcon * 0.5f, cy));
+                var icon = UiFactory.ItemIcon(origin, spec, iconSize, view, 1);
+                At(icon, new Vector2(x + iconSize * 0.5f, cy));
                 var name = UiFactory.Text("Name", origin, view.TypeOf(spec.Symbol)?.DisplayName ?? spec.Symbol.ToString(),
-                                          18, ViewColors.Paper);
-                Place(name.rectTransform, new Vector2(x + ToppingIcon + 12f, -cy - 14f), new Vector2(180f, 28f));
+                                          Mathf.RoundToInt(18 * k), ViewColors.Paper);
+                Place(name.rectTransform, new Vector2(x + iconSize + 12f * k, -cy - 14f * k), new Vector2(ToppingNameWidth * k, 28f * k));
             }
         }
 

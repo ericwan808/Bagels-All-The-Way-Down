@@ -14,8 +14,8 @@ namespace Bagels.View
     /// the screen (which only advances the text and reaches nothing else), or waits for the player to do what it asks (place an A, craft a B, ...) and moves on by itself.
     /// <para>
     /// Steps run in order and start over with each new game. After them come triggered overlays, each shown once a
-    /// game when its condition first holds (D affordable, E or F unlocked, an imperfect order completed), queued
-    /// behind whatever is showing. An overlay with no text in the file is skipped. The
+    /// game when its condition first holds (D affordable, a priority order on the docket, the first D crafted, E or F
+    /// unlocked, an imperfect order completed), queued behind whatever is showing. An overlay with no text in the file is skipped. The
     /// overlay hides while a popup is open, and conditions are checked only once animations have finished, so a
     /// page doesn't move on before the player has seen the result.
     /// </para>
@@ -38,6 +38,9 @@ namespace Bagels.View
         static readonly Color BoxColor = new Color(0.24f, 0.17f, 0.12f, 0.96f);
         static readonly Color Gold = new Color(0.98f, 0.8f, 0.25f);
         static readonly Color Muted = new Color(0.85f, 0.78f, 0.68f);
+        /// <summary>Laid over the rest of the screen while a page waits for a click, to draw the eye to the text.</summary>
+        static readonly Color Dim = new Color(0f, 0f, 0f, 0.7f);
+        const float DimFadeTime = 0.25f;
 
         /// <summary>
         /// One overlay: its id in the script, what it points at, per page what ends it (null = a click), and for a
@@ -49,7 +52,14 @@ namespace Bagels.View
             public Func<int, RectTransform> Highlight; // by page; may return null
             public Func<bool>[] Until = Array.Empty<Func<bool>>();
             public Func<bool> When; // triggered overlays only
+            public Action After; // runs once the overlay is done (or skipped for having no text)
         }
+
+        /// <summary>The Resources video clip that loops after the vertical-adjacency overlay.</summary>
+        public const string VerticalAdjacencyVideo = "vertical_adjacency_example";
+        public const string VerticalAdjacencyVideoTitle = "Making a croissant";
+
+        void ShowVideo(string resource, string title) => TutorialVideo.Open(transform, resource, title);
 
         GameView view;
         TutorialScript script;
@@ -79,6 +89,9 @@ namespace Bagels.View
 
         /// <summary>The overlay currently showing, or null once the tutorial is over (for tests and debugging).</summary>
         public string CurrentId => stepIndex < steps.Count ? steps[stepIndex].Id : null;
+
+        /// <summary>True while an overlay's box is on screen.</summary>
+        public bool IsShowing => root != null && root.gameObject.activeSelf && Current != null;
 
         static TutorialScript LoadScript()
         {
@@ -113,7 +126,8 @@ namespace Bagels.View
                 {
                     Id = "place-a",
                     Highlight = _ => view.Panel != null ? view.Panel.Spawner : null,
-                    Until = new Func<bool>[] { () => view.State.RootBoard.Elements.Any() || Crafted(Symbol.B) },
+                    // The first page is clicked through; the second waits for something on the board.
+                    Until = new Func<bool>[] { null, () => view.State.RootBoard.Elements.Any() || Crafted(Symbol.B) },
                 },
                 new Step
                 {
@@ -164,7 +178,23 @@ namespace Bagels.View
                     Id = "unlocking-D",
                     When = () => Unlocked(Symbol.D) || session.Rules.PriceOf(Symbol.D) is int price && session.Money >= price,
                 },
-                new Step { Id = "vertical-adjacency", When = () => Unlocked(Symbol.E) },
+                new Step
+                {
+                    // Shown once a priority order is actually on the docket; points at its card.
+                    Id = "priority-order",
+                    When = () => session.Orders.Any(o => o.IsPriority),
+                    Highlight = _ => view.Panel != null ? view.Panel.OrderCard(session.Orders.FirstOrDefault(o => o.IsPriority)) : null,
+                },
+                // The first D made by its formula (buying one doesn't count): A-B-A also holds A-B, but the
+                // higher-tier D wins.
+                new Step { Id = "creating-D", When = () => session.Progress.WasCrafted(Symbol.D) },
+                new Step
+                {
+                    // Then a video of a croissant being made loops in the corner until the player closes it.
+                    Id = "vertical-adjacency",
+                    When = () => Unlocked(Symbol.E),
+                    After = () => ShowVideo(VerticalAdjacencyVideo, VerticalAdjacencyVideoTitle),
+                },
                 new Step { Id = "catalysts", When = () => Unlocked(Symbol.F) },
                 // Only once a whole order is in: an imperfect item alone doesn't cut the tip yet.
                 new Step { Id = "extras-and-tips", When = () => session.ImperfectOrdersCompleted > 0 },
@@ -174,6 +204,7 @@ namespace Bagels.View
         void Restart()
         {
             session = view.Session;
+            TutorialVideo.CloseAny(); // including one opened from the help popup
             firstOrder = session?.Orders.FirstOrDefault(o => !o.IsFinal);
             steps.Clear();
             steps.AddRange(sequence);
@@ -211,7 +242,11 @@ namespace Bagels.View
 
         void SkipEmptySteps()
         {
-            while (Current != null && CurrentPages.Count == 0) stepIndex++;
+            while (Current != null && CurrentPages.Count == 0)
+            {
+                Current.After?.Invoke();
+                stepIndex++;
+            }
         }
 
         void Advance()
@@ -219,6 +254,7 @@ namespace Bagels.View
             pageIndex++;
             if (pageIndex >= CurrentPages.Count)
             {
+                Current.After?.Invoke();
                 stepIndex++;
                 pageIndex = 0;
                 SkipEmptySteps();
@@ -290,11 +326,11 @@ namespace Bagels.View
             box.anchoredPosition = new Vector2(0f, -TopMargin);
             bg.gameObject.AddComponent<Outline>().effectColor = Gold;
 
-            body = UiFactory.Text("Text", box, "", 22, ViewColors.Paper, TextAnchor.UpperCenter);
+            body = UiFactory.Text("Text", box, "", 24, ViewColors.Paper, TextAnchor.UpperCenter);
             body.rectTransform.anchorMin = new Vector2(0f, 1f);
             body.rectTransform.anchorMax = new Vector2(1f, 1f);
             body.rectTransform.pivot = new Vector2(0.5f, 1f);
-            hint = UiFactory.Text("Hint", box, "Click to continue", 15, Muted, TextAnchor.LowerRight, FontStyle.Italic);
+            hint = UiFactory.Text("Hint", box, "Click to continue", 16, Muted, TextAnchor.LowerRight, FontStyle.Italic);
             hint.rectTransform.anchorMin = new Vector2(0f, 0f);
             hint.rectTransform.anchorMax = new Vector2(1f, 0f);
             hint.rectTransform.pivot = new Vector2(0.5f, 0f);
@@ -331,6 +367,10 @@ namespace Bagels.View
 
             // Click pages catch every click; pages that wait for an action let everything through.
             catcher.raycastTarget = waitsForClick;
+            // Click pages also dim everything else (the highlight frame and the box stay bright, above it).
+            bool wasDimmed = catcher.color.a > 0f;
+            catcher.color = waitsForClick ? Dim : Color.clear;
+            if (waitsForClick && !wasDimmed) UiTween.On(catcher.rectTransform, UiTween.Now, DimFadeTime).Fade(0f, 1f);
             UiTween.On(box, UiTween.Now, 0.25f).Fade(0f, 1f);
         }
 

@@ -191,7 +191,26 @@ namespace Bagels.View
 
         void Update()
         {
-            if (Application.isPlaying) HandlePointer();
+            if (!Application.isPlaying) return;
+            HandlePointer();
+            TickOrders();
+        }
+
+        TutorialOverlay tutorial;
+
+        /// <summary>True while priority orders' timers are stopped: a popup or a tutorial overlay is showing.</summary>
+        public bool TimersPaused =>
+            (panel != null && panel.PopupOpen) ||
+            ((tutorial != null || (tutorial = GetComponent<TutorialOverlay>()) != null) && tutorial.IsShowing);
+
+        /// <summary>Runs priority orders' timers; a customer whose timer runs out leaves.</summary>
+        void TickOrders()
+        {
+            if (session == null || TimersPaused) return;
+            var left = session.Tick(Time.unscaledDeltaTime);
+            if (left.Count == 0) return;
+            Say(left.Count == 1 ? $"The customer for order #{left[0].Id} got tired of waiting and left."
+                                : $"{left.Count} customers got tired of waiting and left.");
         }
 
         void LateUpdate()

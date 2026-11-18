@@ -12,7 +12,8 @@ Look, there is already a customer with an order! Let's see what they want.
 
 # Dragging or double-clicking the free A onto a slot.
 [place-a]
-All bagels and breads are created using other bagels and breads. The foundational bagel is the everything bagel. Try dragging one into an empty slot on the board.
+All bagels and breads are created using other bagels and breads. The foundational bagel is the everything bagel. 
+Try dragging one into an empty slot on the board, or double click an empty slot.
 
 # Two As side by side merging into a B: how formulas fire.
 [first-formula]
@@ -21,6 +22,7 @@ Now, to create new delicious pastries requires specific adjacency rules. For exa
 # Shown once the first B is created
 [first-formula-complete]
 Fantastique!
+Notice that the new pastry ended up where you last placed a bagel.
 
 # Two Bs side by side merging into a C
 [recursive-breads]
@@ -28,7 +30,7 @@ Some breads have slots of their own. Try creating a slice of wonderbread.
 
 # Scrolling up to open a bread's board, and down to go back.
 [zoom]
-To place toppings on to the bread, hover over it on the board and scroll up to expand it.
+To place toppings on to the bread, hover the bread and scroll up to expand it.
 At this new level of recursion, all the rules of the pastry universe are still the same! Place an everything bagel and scroll back up to return to the main board.
 
 # consuming ingredients
@@ -43,25 +45,29 @@ The customer seemed happy with their order and gave you a tip! The money you ear
 
 # When the player makes enough money to buy the formula for D
 [unlocking-D]
-You've earned enough money to unlock the next formula!\\
-You can also use your money to buy unlocked pastries directly.\\
-When a single pattern on the board could satisfy multiple formulas, it will always create the highest tier of pastry possible.\\
+You've earned enough money to unlock the next formula!
+You can also use your money to buy unlocked pastries directly.
+
+[priority-order]
+A VIP has turned up! Complete their order quickly for a bigger reward!
+
+[creating-D]
+When a single pattern on the board could satisfy multiple formulas, it will always create the highest tier of pastry possible.
 
 # When E is unlocked
 [vertical-adjacency]
-Some formulas require ingredients that are toppings of adjacent breads.\\
-To make a croissant requires an everything bagel to be adjacent to two breads each holding an everything everything bagel.\\
+Some formulas require ingredients that are toppings of adjacent breads.
 Note that the bread holding the toppings will not be consumed by the formula. Give it a try!
 
 # When F is unlocked
 [catalysts]
-Some ingredients are not consumed in a formula unless they are placed last.\\
-These catalysts will be marked in the formula with a golden circle.\\
+Some ingredients are not consumed in a formula unless they are placed last.
+These catalysts will be marked in the formula with a golden circle.
 Try using a single slice of wonder bread to create multiple Dharma bagels.
 
 # Extra toppings in bread are accepted but cut the tip.
 [extras-and-tips]
-That customer did not seem very happy with their order, so they tipped you less.\\
+That customer did not seem very happy with their order, so they tipped you less.
 Do not bring shame to the name L'Pâtisserie Existentialiste.
 
 
