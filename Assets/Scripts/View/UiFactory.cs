@@ -81,20 +81,23 @@ namespace Bagels.View
         }
 
         /// <summary>
-        /// A pastry icon: a coloured circle with its letter. Bread icons instead show a miniature of their slot layout
-        /// with the letter in a corner badge.
+        /// A pastry icon: its artwork, or a coloured circle with its letter. Bread icons also show a miniature of their
+        /// slot layout.
         /// </summary>
         public static RectTransform PastryIcon(Transform parent, PastryType type, float size, GameView view)
         {
             var color = type != null ? type.Color : Color.gray;
+            bool art = type != null && type.Sprite != null;
             var disc = Image($"Icon {(type != null ? type.Symbol.ToString() : "?")}", parent,
-                             type != null && type.Sprite != null ? type.Sprite : view.CircleSprite, color,
+                             art ? type.Sprite : view.CircleSprite, art ? Color.white : color,
                              new Vector2(size, size));
+            disc.preserveAspect = art; // artwork isn't always square
             var root = disc.rectTransform;
             var layout = type != null ? type.ToBoardLayout() : null;
 
             if (layout == null)
             {
+                if (art) return root; // the artwork identifies the pastry; no letter over it
                 var label = Text("Letter", root, type != null ? type.Symbol.ToString() : "?",
                                  Mathf.RoundToInt(size * 0.55f), ViewColors.TextOn(color), TextAnchor.MiddleCenter, FontStyle.Bold);
                 Fill(label.rectTransform);
@@ -120,13 +123,6 @@ namespace Bagels.View
                 var ring = Image("Slot", root, view.RingSprite, ink, Vector2.one * slotRadius * 2f);
                 ring.rectTransform.anchoredPosition = positions[i] * scale;
             }
-
-            var badge = Image("Badge", root, view.CircleSprite, color, Vector2.one * size * 0.4f);
-            badge.rectTransform.anchoredPosition = new Vector2(-0.34f, 0.34f) * size;
-            Image("Badge Outline", badge.rectTransform, view.RingSprite, ink, Vector2.one * size * 0.4f);
-            var letter = Text("Letter", badge.rectTransform, type.Symbol.ToString(), Mathf.RoundToInt(size * 0.26f),
-                              ViewColors.TextOn(color), TextAnchor.MiddleCenter, FontStyle.Bold);
-            Fill(letter.rectTransform);
             return root;
         }
 
@@ -150,7 +146,6 @@ namespace Bagels.View
                 var child = ItemIcon(root, spec.Contents[k], inner, view, layers - 1);
                 child.anchoredPosition = positions[k] * scale;
             }
-            root.Find("Badge")?.SetAsLastSibling(); // keep the bread's letter readable over its toppings
             return root;
         }
     }

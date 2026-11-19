@@ -57,7 +57,7 @@ namespace Bagels.View
 
         /// <summary>The Resources video clip that loops after the vertical-adjacency overlay.</summary>
         public const string VerticalAdjacencyVideo = "vertical_adjacency_example";
-        public const string VerticalAdjacencyVideoTitle = "Making a croissant";
+        public const string VerticalAdjacencyVideoTitle = "Making a baguette";
 
         void ShowVideo(string resource, string title) => TutorialVideo.Open(transform, resource, title);
 
@@ -190,7 +190,7 @@ namespace Bagels.View
                 new Step { Id = "creating-D", When = () => session.Progress.WasCrafted(Symbol.D) },
                 new Step
                 {
-                    // Then a video of a croissant being made loops in the corner until the player closes it.
+                    // Then a video of a baguette being made loops in the corner until the player closes it.
                     Id = "vertical-adjacency",
                     When = () => Unlocked(Symbol.E),
                     After = () => ShowVideo(VerticalAdjacencyVideo, VerticalAdjacencyVideoTitle),

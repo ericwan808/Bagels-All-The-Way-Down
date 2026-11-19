@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
   displayName: Bagel on a turtle on a bagel on a turtle
   symbol: 10
-  sprite: {fileID: 0}
+  sprite: {fileID: 21300000, guid: 2e509586864c54e47af87b5dd9c4279d, type: 3}
   color: {r: 0.45, g: 0.7, b: 0.45, a: 1}
   layout: 0
   purchasable: 0

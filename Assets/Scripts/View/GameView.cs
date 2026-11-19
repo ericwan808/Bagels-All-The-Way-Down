@@ -21,7 +21,7 @@ namespace Bagels.View
     /// <para>
     /// The view is centred on a <see cref="Focus"/> bread (the "current board") and shows two levels below it: the
     /// focus board's elements, and the contents of bread sitting on it. Bread two levels down is drawn closed, as a
-    /// disc with its badge. Scrolling up over a bread on the focus board zooms into it; scrolling down zooms out to
+    /// plain disc. Scrolling up over a bread on the focus board zooms into it; scrolling down zooms out to
     /// the parent. Zooming never moves the camera: the board objects themselves are moved, scaled and faded.
     /// </para>
     /// <para>
@@ -96,15 +96,14 @@ namespace Bagels.View
         [Tooltip("Side panel saved in the scene. If missing, one is built at runtime.")]
         [SerializeField] SidePanel panel;
 
-        // Sorting: each nesting level gets a band of 10; badges and the drag ghost sit above everything. During a
+        // Sorting: each nesting level gets a band of 10; the drag ghost sits above everything. During a
         // zoom, the frame being faded is pushed far below the other one.
         const int DepthBand = 10;
         const int HoverOrder = 9;
-        const int BadgeOrder = 500;
         const int GhostOrder = 1000;
         /// <summary>
-        /// Sorting order of the side panels' canvas: above every board sprite (badges top out just past
-        /// <see cref="BadgeOrder"/>), so boards slide under the panels while zooming, but below
+        /// Sorting order of the side panels' canvas: above every board sprite, so boards slide under the panels
+        /// while zooming, but below
         /// <see cref="GhostOrder"/>, so anything being dragged shows over the panels.
         /// </summary>
         public const int PanelOrder = 900;
@@ -265,6 +264,13 @@ namespace Bagels.View
         }
 
         public PastryType TypeOf(Symbol symbol) => types.TryGetValue(symbol, out var t) ? t : null;
+
+        /// <summary>
+        /// The type whose look an element is drawn with. The top board always looks like the original root bread
+        /// (a plain disc), even after a reset has made it an H.
+        /// </summary>
+        PastryType LookOf(Element element) =>
+            element == State?.Root && rules != null ? TypeOf(rules.RootSymbol) ?? TypeOf(element.Symbol) : TypeOf(element.Symbol);
 
         public Vector2 ScreenToWorld(Vector2 screen) => Camera.ScreenToWorldPoint(new Vector3(screen.x, screen.y, 0f));
 
@@ -857,7 +863,7 @@ namespace Bagels.View
         void DrawBread(Element bread, Vector2 center, float radius, int depth)
         {
             int band = depth * DepthBand;
-            var type = TypeOf(bread.Symbol);
+            var type = LookOf(bread);
             SpawnPastry(type, center, radius, band, showLabel: false, name: $"{bread.Symbol} (bread)");
 
             var board = bread.Child;
@@ -904,23 +910,13 @@ namespace Bagels.View
                 }
             }
 
-            if (depth > 0) DrawBadge(bread, type, center, radius, depth);
         }
 
-        /// <summary>Bread too deep to open: just its disc and badge. Its contents stay hidden until zoomed closer.</summary>
+        /// <summary>Bread too deep to open: just its disc. Its contents stay hidden until zoomed closer.</summary>
         void DrawClosedBread(Element bread, Vector2 center, float radius, int depth)
         {
             var type = TypeOf(bread.Symbol);
             SpawnPastry(type, center, radius, depth * DepthBand, showLabel: false, name: $"{bread.Symbol} (bread, closed)");
-            DrawBadge(bread, type, center, radius, depth);
-        }
-
-        // Bread shows its letter in a small badge on the rim (the focus needs no label).
-        void DrawBadge(Element bread, PastryType type, Vector2 center, float radius, int depth)
-        {
-            var dir = new Vector2(-0.7071f, 0.7071f);
-            SpawnPastry(type, center + dir * radius * 0.88f, radius * 0.26f, BadgeOrder + depth * 2,
-                        showLabel: true, name: $"{bread.Symbol} badge");
         }
 
         void AddBreadTarget(Element bread, Vector2 center, float radius, int depth)

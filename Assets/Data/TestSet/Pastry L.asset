@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
   displayName: True plain bagel
   symbol: 11
-  sprite: {fileID: 0}
+  sprite: {fileID: 21300000, guid: e1c959b70e626574a8d721faf4e84a12, type: 3}
   color: {r: 0.98, g: 0.84, b: 0.25, a: 1}
   layout: 0
   purchasable: 0

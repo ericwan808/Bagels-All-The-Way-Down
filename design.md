@@ -177,12 +177,12 @@ Listed in product order, which is also the unlock order. Two rules keep the list
 | -------- | ---------------------------------------- | -------- | ----------------- | -------------------------- |
 | A        | Everything bagel                         | 0        | no formula        |                            |
 | B        | Everything bagel + Cream cheese          | 2        | `A-A`             | `A A \| 0-1`               |
-| C (K3)   | Slice of wonderbread                     | 10       | `B-B`             | `B B \| 0-1`               |
+| C (K3)   | Croissant                                | 10       | `B-B`             | `B B \| 0-1`               |
 | D        | Everything everything bagel              | 25       | `A1-B-A-1`        | `A B A \| 0-1 1-2 0-2`     |
-| E (K2,3) | Croissant                                | 100       | `D<A>D`           | `D A D \| 0<1 1>2`         |
+| E (K2,3) | Baguette                                 | 100       | `D<A>D`           | `D A D \| 0<1 1>2`         |
 | F        | Dharma bagel                             | 888       | `B-[C]-B`         | `B [C] B \| 0-1 1-2`       |
 | G        | Earth bagel                              | 1970       | `F-B-F`           | `F B F \| 0-1 1-2`         |
-| H (W7)   | Na'an                                    | 11500      | `B>G<B`           | `B G B \| 0>1 1<2`         |
+| H (W7)   | Slice of wonderbread                     | 11500      | `B>G<B`           | `B G B \| 0>1 1<2`         |
 | I        | Black hole bagel                         | 197800      | `F1>G<F-1`        | `F G F \| 0>1 1<2 0-2`     |
 | J        | Galaxy bagel                             | 4297000      | `D>G>[I]<G<D`     | `D G [I] G D \| 0>1 1>2 2<3 3<4` |
 | K        | Bagel on a turtle on a bagel on a turtle | No price | `J1-J>F-F<J-J>F-F<1` | `J J F F J J F F \| 0-1 1>2 2-3 3<4 4-5 5>6 6-7 7<0` |
