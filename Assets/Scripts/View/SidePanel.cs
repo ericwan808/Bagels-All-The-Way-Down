@@ -230,7 +230,8 @@ namespace Bagels.View
 
         /// <summary>Plays the vertical adjacency video from the tutorial in the corner window again.</summary>
         void ShowAdjacencyVideo() =>
-            TutorialVideo.Open(view.transform, TutorialOverlay.VerticalAdjacencyVideo, TutorialOverlay.VerticalAdjacencyVideoTitle);
+            TutorialVideo.Open(view.transform, TutorialOverlay.VerticalAdjacencyVideo, TutorialOverlay.VerticalAdjacencyVideoSize,
+                               TutorialOverlay.VerticalAdjacencyVideoTitle);
         void CloseHelp() { if (help != null) help.SetActive(false); }
 
         // ------------------------------------------------------------ menu

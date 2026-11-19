@@ -1,3 +1,4 @@
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Video;
@@ -5,10 +6,14 @@ using UnityEngine.Video;
 namespace Bagels.View
 {
     /// <summary>
-    /// A small window in the lower right of the board, just left of the orders panel, that loops a video clip from
-    /// Resources until the player closes it with its X button (design.md, "Tutorial"). The video plays muted, so it
-    /// doesn't talk over the music. It has its own canvas, so it stays up while the tutorial overlay is hidden, and
+    /// A small window in the lower right of the board, just left of the orders panel, that loops a video file from
+    /// StreamingAssets until the player closes it with its X button (design.md, "Tutorial"). The video plays muted, so
+    /// it doesn't talk over the music. It has its own canvas, so it stays up while the tutorial overlay is hidden, and
     /// shows over the help popup. Only one window shows at a time.
+    /// <para>
+    /// It plays by URL rather than as an imported VideoClip because Web builds can only play videos the browser fetches
+    /// itself. A URL gives no size until the video has loaded, so the caller passes the video's pixel size.
+    /// </para>
     /// </summary>
     public sealed class TutorialVideo : MonoBehaviour
     {
@@ -37,27 +42,32 @@ namespace Bagels.View
             current = null;
         }
 
-        /// <summary>Opens a window playing <c>Resources/&lt;resource&gt;</c>, or returns null if there is no such clip.</summary>
-        public static TutorialVideo Open(Transform parent, string resource, string title)
+        /// <summary>
+        /// Opens a window playing <c>StreamingAssets/&lt;file&gt;</c>, a video <paramref name="size"/> pixels across, or
+        /// returns null if the file is missing. (Web builds can't check ahead; a missing file there just logs an error.)
+        /// </summary>
+        public static TutorialVideo Open(Transform parent, string file, Vector2Int size, string title)
         {
-            var clip = Resources.Load<VideoClip>(resource);
-            if (clip == null)
+            string url = Application.streamingAssetsPath + "/" + file;
+#if !UNITY_WEBGL || UNITY_EDITOR
+            if (!File.Exists(url))
             {
-                Debug.LogWarning($"Bagels: no video clip at Resources/{resource}; the tutorial video is skipped.");
+                Debug.LogWarning($"Bagels: no video at StreamingAssets/{file}; the tutorial video is skipped.");
                 return null;
             }
+#endif
             CloseAny();
             var go = new GameObject("Tutorial Video", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             go.transform.SetParent(parent, false);
             var video = go.AddComponent<TutorialVideo>();
-            video.Build(clip, title);
+            video.Build(url, size, title);
             current = video;
             return video;
         }
 
         public void Close() => Destroy(gameObject);
 
-        void Build(VideoClip clip, string title)
+        void Build(string url, Vector2Int videoSize, string title)
         {
             var canvas = GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -67,7 +77,7 @@ namespace Bagels.View
             scaler.referenceResolution = new Vector2(1920f, ReferenceHeight);
             scaler.matchWidthOrHeight = 1f; // same as the side panels, so the orders panel's width is exact
 
-            float aspect = clip.width > 0 ? (float)clip.height / clip.width : 9f / 16f;
+            float aspect = videoSize.x > 0 ? (float)videoSize.y / videoSize.x : 9f / 16f;
             float videoHeight = VideoWidth * aspect;
             var size = new Vector2(VideoWidth + 2 * Border, HeaderHeight + videoHeight + Border);
 
@@ -99,7 +109,7 @@ namespace Bagels.View
             button.targetGraphic = close;
             button.onClick.AddListener(Close);
 
-            texture = new RenderTexture((int)Mathf.Max(1, clip.width), (int)Mathf.Max(1, clip.height), 0);
+            texture = new RenderTexture(Mathf.Max(1, videoSize.x), Mathf.Max(1, videoSize.y), 0);
             var screen = new GameObject("Video", typeof(RectTransform), typeof(RawImage));
             screen.transform.SetParent(rt, false);
             var image = screen.GetComponent<RawImage>();
@@ -113,8 +123,9 @@ namespace Bagels.View
 
             player = gameObject.AddComponent<VideoPlayer>();
             player.playOnAwake = false;
-            player.source = VideoSource.VideoClip;
-            player.clip = clip;
+            player.source = VideoSource.Url;
+            player.url = url;
+            player.errorReceived += (_, message) => Debug.LogWarning($"Bagels: tutorial video failed to play ({url}): {message}");
             player.renderMode = VideoRenderMode.RenderTexture;
             player.targetTexture = texture;
             player.isLooping = true;

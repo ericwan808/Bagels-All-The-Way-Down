@@ -55,11 +55,13 @@ namespace Bagels.View
             public Action After; // runs once the overlay is done (or skipped for having no text)
         }
 
-        /// <summary>The Resources video clip that loops after the vertical-adjacency overlay.</summary>
-        public const string VerticalAdjacencyVideo = "vertical_adjacency_example";
+        /// <summary>The StreamingAssets video that loops after the vertical-adjacency overlay.</summary>
+        public const string VerticalAdjacencyVideo = "vertical_adjacency_example.mp4";
+        /// <summary>Its size in pixels, which sets the window's shape. Update it if the video is replaced.</summary>
+        public static readonly Vector2Int VerticalAdjacencyVideoSize = new Vector2Int(802, 824);
         public const string VerticalAdjacencyVideoTitle = "Making a baguette";
 
-        void ShowVideo(string resource, string title) => TutorialVideo.Open(transform, resource, title);
+        void ShowVideo(string file, Vector2Int size, string title) => TutorialVideo.Open(transform, file, size, title);
 
         GameView view;
         TutorialScript script;
@@ -193,7 +195,7 @@ namespace Bagels.View
                     // Then a video of a baguette being made loops in the corner until the player closes it.
                     Id = "vertical-adjacency",
                     When = () => Unlocked(Symbol.E),
-                    After = () => ShowVideo(VerticalAdjacencyVideo, VerticalAdjacencyVideoTitle),
+                    After = () => ShowVideo(VerticalAdjacencyVideo, VerticalAdjacencyVideoSize, VerticalAdjacencyVideoTitle),
                 },
                 new Step { Id = "catalysts", When = () => Unlocked(Symbol.F) },
                 // Only once a whole order is in: an imperfect item alone doesn't cut the tip yet.

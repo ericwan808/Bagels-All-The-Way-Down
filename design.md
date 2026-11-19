@@ -134,7 +134,7 @@ Bagels and breads are crafted by satisfying formulas. A formula requires certain
   - `unlocking-D`: the player has enough money to buy D's formula.
   - `priority-order`: a priority order is on the docket (the first one turns up as soon as D is unlocked). It frames that order's card.
   - `creating-D`: the first D is crafted by its formula (buying one does not count).
-  - `vertical-adjacency`: E is unlocked. Once it is clicked through, `Assets/Resources/vertical_adjacency_example.mp4` loops, muted, in a small window in the lower right of the board (just left of the orders panel) until the player closes it with its X button.
+  - `vertical-adjacency`: E is unlocked. Once it is clicked through, `Assets/StreamingAssets/vertical_adjacency_example.mp4` loops, muted, in a small window in the lower right of the board (just left of the orders panel) until the player closes it with its X button.
   - `catalysts`: F is unlocked.
   - `extras-and-tips`: an order is completed with at least one extra topping. Handing in an imperfect item does not count until the whole order is in.
 
