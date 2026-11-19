@@ -5887,6 +5887,7 @@ MonoBehaviour:
   helpButton: {fileID: 1762155349}
   helpClose: {fileID: 798851704}
   helpBackdrop: {fileID: 1376961990}
+  adjacencyVideoButton: {fileID: 0}
   help: {fileID: 1376961986}
   menu: {fileID: 396553626}
   menuClose: {fileID: 358592062}

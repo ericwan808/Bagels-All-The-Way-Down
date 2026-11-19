@@ -23,11 +23,12 @@ namespace Bagels.View
                 case "P3":
                     return new[] { new Vector2(-1f, 0f), Vector2.zero, new Vector2(1f, 0f) };
                 case "K2,3":
-                    // The two-slot side above and below a row of the three-slot side.
+                    // The two-slot side left and right of a column of the three-slot side, so the chain 0-3-1 runs
+                    // horizontally along the bread (E is a baguette, drawn lying flat).
                     return new[]
                     {
-                        new Vector2(0f, 1f), new Vector2(0f, -1f),
-                        new Vector2(-1.1f, 0f), Vector2.zero, new Vector2(1.1f, 0f),
+                        new Vector2(1f, 0f), new Vector2(-1f, 0f),
+                        new Vector2(0f, 1.1f), Vector2.zero, new Vector2(0f, -1.1f),
                     };
                 default:
                 {

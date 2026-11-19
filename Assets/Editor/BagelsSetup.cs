@@ -15,12 +15,12 @@ using UnityEngine.InputSystem.UI;
 /// </summary>
 public static class BagelsSetup
 {
-    const string SpriteDir = "Assets/Sprites/Generated";
+    const string SpriteDir = "Assets/Sprites/Shapes";
     const string DataDir = "Assets/Data/TestSet";
     const string PrefabPath = "Assets/Prefabs/Pastry.prefab";
     const string ScenePath = "Assets/Scenes/main.unity";
     const string TitleScenePath = "Assets/Scenes/title.unity";
-    const string CirclePath = "Assets/Sprites/Circle.png";
+    const string CirclePath = "Assets/Sprites/Shapes/Circle.png";
 
     [MenuItem("Bagels/Setup Test Level")]
     public static void Run()

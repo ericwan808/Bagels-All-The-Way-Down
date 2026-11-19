@@ -41,10 +41,10 @@ namespace Bagels.View.Tests
             view = new GameObject("Test Game").AddComponent<GameView>();
             view.EditorInit(level,
                             AssetDatabase.LoadAssetAtPath<PastryView>("Assets/Prefabs/Pastry.prefab"),
-                            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Circle.png"),
-                            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Generated/Ring.png"),
-                            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Generated/Square.png"),
-                            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Generated/Triangle.png"));
+                            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Shapes/Circle.png"),
+                            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Shapes/Ring.png"),
+                            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Shapes/Square.png"),
+                            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Shapes/Triangle.png"));
             view.RefreshPreview();
             Assert.IsNotNull(view.State, "preview did not build a game");
         }

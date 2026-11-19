@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
   displayName: Baguette
   symbol: 4
-  sprite: {fileID: 0}
+  sprite: {fileID: 21300000, guid: 73a60d5bca034cbb83ead21985e4d07f, type: 3}
   color: {r: 0.45, g: 0.24, b: 0.13, a: 1}
   layout: 4
   purchasable: 1
