@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Bagels.Data::Bagels.Data.PastryType
   displayName: Galaxy bagel
   symbol: 9
-  sprite: {fileID: 0}
+  sprite: {fileID: 21300000, guid: 71c1e6e4e4105ef4aa5735574f3ec1ad, type: 3}
   color: {r: 0.88, g: 0.52, b: 0.62, a: 1}
   layout: 0
   purchasable: 1

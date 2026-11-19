@@ -26,7 +26,7 @@ Notice that the new pastry ended up where you last placed a bagel.
 
 # Two Bs side by side merging into a C
 [recursive-breads]
-Some breads have slots of their own. Try creating a slice of wonderbread.
+Some breads have slots of their own. Try creating a croissant.
 
 # Scrolling up to open a bread's board, and down to go back.
 [zoom]
@@ -35,7 +35,7 @@ At this new level of recursion, all the rules of the pastry universe are still t
 
 # consuming ingredients
 [consuming-ingredients]
-Creating a slice of wonderbread has consumed all of our bagels with cream cheese! Try creating another one.
+Creating a croissant has consumed all of our bagels with cream cheese! Try creating another one.
 
 # Dragging a finished item from the board onto an order.
 [hand-in]
@@ -63,7 +63,7 @@ Note that the bread holding the toppings will not be consumed by the formula. Gi
 [catalysts]
 Some ingredients are not consumed in a formula unless they are placed last.
 These catalysts will be marked in the formula with a golden circle.
-Try using a single slice of wonder bread to create multiple Dharma bagels.
+Try using a single croissant to create multiple Dharma bagels.
 
 # Extra toppings in bread are accepted but cut the tip.
 [extras-and-tips]
@@ -79,7 +79,7 @@ Do not bring shame to the name L'Pâtisserie Existentialiste.
 
 # Resetting the board to a fresh H once H is unlocked.
 [reset]
-You've unlocked the formula for Naan bread, and this whole time you've been working on one big piece of Naan bread!\\
+You've unlocked the formula for a slice of wonderbread, and this whole time you've been working on one big slice of wonderbread!\\
 If your board ever gets overwehlmed you can toss the entire thing away and start fresh.
 
 # The final order appearing: delivering it wins the game.

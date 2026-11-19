@@ -1,0 +1,468 @@
+fileFormatVersion: 2
+guid: 634db8952e2e2d348a98ac5f368da2a0
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 2628440857379273515
+    second: Pastry_sheet_0
+  - first:
+      213: 6748145339733287413
+    second: Pastry_sheet_1
+  - first:
+      213: 4348617281900412268
+    second: Pastry_sheet_2
+  - first:
+      213: -756069390857723858
+    second: Pastry_sheet_3
+  - first:
+      213: -1038921673498099539
+    second: Pastry_sheet_4
+  - first:
+      213: 8602099417343057803
+    second: Pastry_sheet_5
+  - first:
+      213: -8377759992108291280
+    second: Pastry_sheet_6
+  - first:
+      213: -2593798468969946931
+    second: Pastry_sheet_7
+  - first:
+      213: 4844283709560492086
+    second: Pastry_sheet_8
+  - first:
+      213: -56487280094257416
+    second: Pastry_sheet_9
+  - first:
+      213: -4746588189690715150
+    second: Pastry_sheet_10
+  - first:
+      213: -286816243248820427
+    second: Pastry_sheet_11
+  - first:
+      213: -2875833611207294250
+    second: Pastry_sheet_12
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Pastry_sheet_0
+      rect:
+        serializedVersion: 2
+        x: 48
+        y: 2316
+        width: 724
+        height: 724
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b2bf631a8091a7420800000000000000
+      internalID: 2628440857379273515
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_1
+      rect:
+        serializedVersion: 2
+        x: 830
+        y: 2656
+        width: 14
+        height: 116
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5f1a28bee6a36ad50800000000000000
+      internalID: 6748145339733287413
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_2
+      rect:
+        serializedVersion: 2
+        x: 842
+        y: 2312
+        width: 728
+        height: 726
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c6d7ccfb064695c30800000000000000
+      internalID: 4348617281900412268
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_3
+      rect:
+        serializedVersion: 2
+        x: 1600
+        y: 2067
+        width: 752
+        height: 987
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e20216415e6e185f0800000000000000
+      internalID: -756069390857723858
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_4
+      rect:
+        serializedVersion: 2
+        x: 2428
+        y: 2262
+        width: 728
+        height: 724
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: da001bd0e320591f0800000000000000
+      internalID: -1038921673498099539
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_5
+      rect:
+        serializedVersion: 2
+        x: 3196
+        y: 2214
+        width: 874
+        height: 858
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b8fd35d18dbc06770800000000000000
+      internalID: 8602099417343057803
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_6
+      rect:
+        serializedVersion: 2
+        x: 42
+        y: 1542
+        width: 724
+        height: 724
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 03be7e8aca73cbb80800000000000000
+      internalID: -8377759992108291280
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_7
+      rect:
+        serializedVersion: 2
+        x: 1398
+        y: 2233
+        width: 26
+        height: 33
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: dc02816f80af00cd0800000000000000
+      internalID: -2593798468969946931
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_8
+      rect:
+        serializedVersion: 2
+        x: 2793
+        y: 1440
+        width: 865
+        height: 854
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 63090932e5a5a3340800000000000000
+      internalID: 4844283709560492086
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_9
+      rect:
+        serializedVersion: 2
+        x: 810
+        y: 1176
+        width: 978
+        height: 978
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8fe57a73e11573ff0800000000000000
+      internalID: -56487280094257416
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_10
+      rect:
+        serializedVersion: 2
+        x: 1900
+        y: 638
+        width: 1190
+        height: 916
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2f3ab62a03bb02eb0800000000000000
+      internalID: -4746588189690715150
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_11
+      rect:
+        serializedVersion: 2
+        x: 1270
+        y: 1164
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 53f87597526050cf0800000000000000
+      internalID: -286816243248820427
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Pastry_sheet_12
+      rect:
+        serializedVersion: 2
+        x: 154
+        y: 232
+        width: 830
+        height: 870
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6d24cd2419cf618d0800000000000000
+      internalID: -2875833611207294250
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      Pastry_sheet_0: 2628440857379273515
+      Pastry_sheet_1: 6748145339733287413
+      Pastry_sheet_10: -4746588189690715150
+      Pastry_sheet_11: -286816243248820427
+      Pastry_sheet_12: -2875833611207294250
+      Pastry_sheet_2: 4348617281900412268
+      Pastry_sheet_3: -756069390857723858
+      Pastry_sheet_4: -1038921673498099539
+      Pastry_sheet_5: 8602099417343057803
+      Pastry_sheet_6: -8377759992108291280
+      Pastry_sheet_7: -2593798468969946931
+      Pastry_sheet_8: 4844283709560492086
+      Pastry_sheet_9: -56487280094257416
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

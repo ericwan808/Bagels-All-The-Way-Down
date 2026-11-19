@@ -20,11 +20,14 @@ namespace Bagels.View
         {
             Type = type;
             transform.localScale = Vector3.one * (radius * 2f);
-            if (type != null && type.Sprite != null) body.sprite = type.Sprite;
-            body.color = type != null ? type.Color : Color.gray;
+            // Artwork is drawn as-is (its sprite is imported 1 unit across, like the circle) and carries no letter;
+            // the plain circle is tinted with the type's colour and labelled.
+            bool art = type != null && type.Sprite != null;
+            if (art) body.sprite = type.Sprite;
+            body.color = art ? Color.white : type != null ? type.Color : Color.gray;
             body.sortingOrder = sortingOrder;
 
-            label.gameObject.SetActive(showLabel);
+            label.gameObject.SetActive(showLabel && !art);
             label.text = type != null ? type.Symbol.ToString() : "?";
             label.color = LabelColor(ViewColors.TextOn(body.color));
             label.anchor = TextAnchor.MiddleCenter;
