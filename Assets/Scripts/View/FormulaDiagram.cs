@@ -17,7 +17,10 @@ namespace Bagels.View
         {
             var nodes = formula.Ingredients;
             var links = formula.Links;
-            var pos = Positions(nodes.Length, links, box.rect.size, iconSize);
+            // The target's formula (L) is a deep tree, drawn top-down like the sketch at the bottom of design.md.
+            bool target = view.Level != null && formula.Product == view.Level.Target;
+            var pos = target ? Layered(nodes.Length, links, iconSize)
+                             : Positions(nodes.Length, links, box.rect.size, iconSize);
             iconSize = FitToBox(pos, box.rect.size, iconSize);
 
             var lineColor = ViewColors.Paper;
@@ -81,6 +84,7 @@ namespace Bagels.View
         /// </summary>
         static Vector2[] Positions(int count, FormulaAsset.Link[] links, Vector2 box, float iconSize)
         {
+            if (TryLadder(count, links, iconSize, out var ladder)) return ladder;
             var level = Levels(count, links);
             int levels = count > 0 ? level.Max() + 1 : 1;
 
@@ -120,6 +124,150 @@ namespace Bagels.View
                     pos[members[k]] = new Vector2((k - (members.Count - 1) * 0.5f) * colGap, y);
             }
             return pos;
+        }
+
+        /// <summary>
+        /// Top-down tree layout, one row per vertical level. A node with nodes above it (vertical links) sits under
+        /// their average; nodes sharing the same parents spread apart under them; a node with nothing above sits beside
+        /// the node it is normally linked to in its row, left first, then right. For L this gives:
+        /// <code>
+        ///       K
+        ///       ↓
+        ///       J
+        ///       ↓
+        ///   G - I - G
+        ///     ↘   ↙
+        ///       F
+        ///     ↙   ↘
+        ///   D       D
+        ///   ↓       ↓
+        /// A-B-A   A-B-A
+        /// </code>
+        /// </summary>
+        static Vector2[] Layered(int count, FormulaAsset.Link[] links, float iconSize)
+        {
+            var level = Levels(count, links);
+            int levels = count > 0 ? level.Max() + 1 : 1;
+            float unit = iconSize * 1.35f;
+            float rowGap = iconSize * 1.6f;
+            var x = new float?[count];
+
+            IEnumerable<int> Parents(int v) => links
+                .Where(l => l.kind != AdjacencyKind.Normal)
+                .Select(l => l.kind == AdjacencyKind.Down ? (upper: l.from, lower: l.to) : (upper: l.to, lower: l.from))
+                .Where(e => e.lower == v).Select(e => e.upper);
+            IEnumerable<int> Beside(int v) => links
+                .Where(l => l.kind == AdjacencyKind.Normal && (l.from == v || l.to == v))
+                .Select(l => l.from == v ? l.to : l.from);
+
+            for (int row = 0; row < levels; row++)
+            {
+                var members = Enumerable.Range(0, count).Where(i => level[i] == row).ToList();
+
+                // Under the parents; siblings with the same parents spread three units apart.
+                var groups = members.Select(v => (v, parents: Parents(v).Where(p => x[p] != null).OrderBy(p => p).ToList()))
+                                    .Where(m => m.parents.Count > 0)
+                                    .GroupBy(m => string.Join(",", m.parents));
+                foreach (var g in groups)
+                {
+                    var sibs = g.ToList();
+                    float center = sibs[0].parents.Average(p => x[p].Value);
+                    for (int k = 0; k < sibs.Count; k++)
+                        x[sibs[k].v] = center + (k - (sibs.Count - 1) * 0.5f) * unit * 3f;
+                }
+
+                // Beside an already-placed neighbour in the row, left then right; repeat for chains.
+                bool placed = true;
+                while (placed)
+                {
+                    placed = false;
+                    foreach (int anchor in members.Where(m => x[m] != null).ToList())
+                    {
+                        var free = Beside(anchor).Where(n => level[n] == row && x[n] == null).ToList();
+                        float a = x[anchor].Value;
+                        foreach (int n in free)
+                        {
+                            bool leftTaken = members.Any(m => x[m] != null && Mathf.Abs(x[m].Value - (a - unit)) < 0.01f);
+                            x[n] = leftTaken ? a + unit : a - unit;
+                            placed = true;
+                        }
+                    }
+                }
+
+                // Anything left (e.g. the top node): to the right of the row, or centred if the row is empty.
+                foreach (int v in members.Where(m => x[m] == null))
+                {
+                    var used = members.Where(m => x[m] != null).Select(m => x[m].Value).ToList();
+                    x[v] = used.Count > 0 ? used.Max() + unit : 0f;
+                }
+            }
+
+            var pos = new Vector2[count];
+            for (int i = 0; i < count; i++)
+                pos[i] = new Vector2(x[i] ?? 0f, ((levels - 1) * 0.5f - level[i]) * rowGap);
+            return pos;
+        }
+
+        /// <summary>
+        /// A single loop closed by two opposite "side" links, normal links whose two ends are both the upper end of a
+        /// vertical link (K: J1-J&gt;F-F&lt;J-J&gt;F-F&lt;1). Drawn as two rows joined at their ends by the side links,
+        /// e.g. <c>J → F – F ← J</c> over <c>J → F – F ← J</c>, with the inner nodes pulled towards the middle so
+        /// the rectangle looks slightly pinched.
+        /// </summary>
+        static bool TryLadder(int count, FormulaAsset.Link[] links, float iconSize, out Vector2[] pos)
+        {
+            pos = null;
+            if (count < 6 || count % 2 != 0 || links.Length != count) return false;
+            var adj = new List<int>[count];
+            for (int i = 0; i < count; i++) adj[i] = new List<int>();
+            foreach (var l in links)
+            {
+                if (l.from == l.to) return false;
+                adj[l.from].Add(l.to);
+                adj[l.to].Add(l.from);
+            }
+            if (adj.Any(a => a.Count != 2)) return false;
+
+            // The upper end of every vertical link.
+            var upper = new bool[count];
+            foreach (var l in links)
+                if (l.kind == AdjacencyKind.Down) upper[l.from] = true;
+                else if (l.kind == AdjacencyKind.Up) upper[l.to] = true;
+            var side = links.FirstOrDefault(l => l.kind == AdjacencyKind.Normal && upper[l.from] && upper[l.to]);
+            if (side == null) return false;
+
+            // Walk the loop from one end of the side link, away from the other end.
+            var cycle = new List<int> { side.to };
+            int prev = side.from;
+            while (cycle.Count < count)
+            {
+                int cur = cycle[cycle.Count - 1];
+                int next = adj[cur][0] == prev ? adj[cur][1] : adj[cur][0];
+                if (next == side.to) return false; // closed early: not one loop
+                prev = cur;
+                cycle.Add(next);
+            }
+            if (!adj[cycle[count - 1]].Contains(cycle[0]) || cycle[count - 1] != side.from) return false;
+
+            // The opposite link must be a side link too.
+            int half = count / 2;
+            int s1 = cycle[half - 1], s2 = cycle[half];
+            if (!upper[s1] || !upper[s2] ||
+                !links.Any(l => l.kind == AdjacencyKind.Normal && ((l.from == s1 && l.to == s2) || (l.from == s2 && l.to == s1))))
+                return false;
+
+            float colGap = iconSize * 2f;
+            float outer = iconSize * 1.1f;   // ends of each row
+            float inner = iconSize * 0.75f;  // the pinched middle
+            pos = new Vector2[count];
+            for (int k = 0; k < half; k++)
+            {
+                float x = (k - (half - 1) * 0.5f) * colGap;
+                float y = k == 0 || k == half - 1 ? outer : inner;
+                pos[cycle[k]] = new Vector2(x, y);                // top row, left to right
+                pos[cycle[count - 1 - k]] = new Vector2(x, -y);   // bottom row, under it
+            }
+            return true;
         }
 
         /// <summary>Each node's row: 0 is the top, and a Down edge puts its target one row lower.</summary>

@@ -212,7 +212,7 @@ namespace Bagels.Core
             LastUnlocked = Array.Empty<PastryInfo>();
             if (!order.IsComplete) return DeliveryOutcome.Accepted;
 
-            Money += order.TipEarned;
+            Money = AddCapped(Money, order.TipEarned);
             if (order.Imperfections > 0) ImperfectOrdersCompleted++;
             foreach (var component in order.RewardComponents) stock[component] = StockOf(component) + 1;
             orders.Remove(order);
@@ -275,6 +275,23 @@ namespace Bagels.Core
             firstPriorityAdded = true;
             AddOrder(priority: true);
         }
+
+        /// <summary>What one press of the developer-mode money button grants.</summary>
+        public const int DevGrantAmount = 10_000_000;
+
+        /// <summary>
+        /// Developer mode: adds <paramref name="amount"/> to the balance, capped at <see cref="int.MaxValue"/> so it
+        /// never wraps negative. Every undo snapshot gets it too, so undoing a placement afterwards keeps the grant.
+        /// </summary>
+        public void DevGrantMoney(int amount)
+        {
+            if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
+            Money = AddCapped(Money, amount);
+            for (int i = 0; i < undo.Count; i++) undo[i] = (undo[i].state, AddCapped(undo[i].money, amount), undo[i].stock);
+            RefreshUnlocks();
+        }
+
+        static int AddCapped(int a, int b) => (int)Math.Min((long)a + b, int.MaxValue);
 
         /// <summary>For tests: adds money (or, with 0, just re-checks crafting unlocks) as if an order had paid it.</summary>
         internal void GrantMoney(int amount)

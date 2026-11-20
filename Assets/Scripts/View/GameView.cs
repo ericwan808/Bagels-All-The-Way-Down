@@ -95,6 +95,8 @@ namespace Bagels.View
         [SerializeField] float dragThreshold = 8f;
         [Tooltip("Side panel saved in the scene. If missing, one is built at runtime.")]
         [SerializeField] SidePanel panel;
+        [Tooltip("Shows a button that grants $10M per click. Only works in the Editor and in Development Builds.")]
+        [SerializeField] bool developerMode;
 
         // Sorting: each nesting level gets a band of 10; the drag ghost sits above everything. During a
         // zoom, the frame being faded is pushed far below the other one.
@@ -460,6 +462,25 @@ namespace Bagels.View
             LastError = null;
             Message = null;
             Redraw();
+            Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// The Inspector's developer mode, honoured only in the Editor and in Development Builds so a release build
+        /// never shows the money button even if the box was left ticked.
+        /// </summary>
+        public bool DeveloperMode =>
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            developerMode;
+#else
+            false;
+#endif
+
+        /// <summary>Developer mode: grants <see cref="GameSession.DevGrantAmount"/>.</summary>
+        public void DevGrantMoney()
+        {
+            if (!DeveloperMode || session == null) return;
+            session.DevGrantMoney(GameSession.DevGrantAmount);
             Changed?.Invoke();
         }
 

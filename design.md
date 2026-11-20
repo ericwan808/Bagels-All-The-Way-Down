@@ -187,3 +187,14 @@ Listed in product order, which is also the unlock order. Two rules keep the list
 | J        | Galaxy bagel                             | 4297000      | `D>G>[I]<G<D`     | `D G [I] G D \| 0>1 1>2 2<3 3<4` |
 | K        | Bagel on a turtle on a bagel on a turtle | No price | `J1-J>F-F<J-J>F-F<1` | `J J F F J J F F \| 0-1 1>2 2-3 3<4 4-5 5>6 6-7 7<0` |
 | L        | True plain bagel                         | No price | `K>J>I(-G>F1(>D>B(-A)(-A))(>D>B(-A)(-A)))(-G>1)` | `K J I G G F D D A B A A B A \| 0>1 1>2 2-3 2-4 3>5 4>5 5>6 5>7 6>9 7>12 9-8 9-10 12-11 12-13` |
+
+
+      K
+      |
+      J
+      |
+  G - I - G
+      F
+  D       D
+  |       |
+A-B-A   A-B-A

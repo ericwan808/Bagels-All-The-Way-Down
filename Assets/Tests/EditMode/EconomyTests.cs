@@ -131,6 +131,21 @@ namespace Bagels.Core.Tests
         }
 
         [Test]
+        public void DevGrant_SurvivesUndo_AndCapsInsteadOfOverflowing()
+        {
+            session.GrantMoney(2);
+            session.Place(root, 0, Symbol.B); // $2
+            session.DevGrantMoney(GameSession.DevGrantAmount);
+            Assert.AreEqual(GameSession.DevGrantAmount, session.Money);
+            session.Undo();
+            Assert.AreEqual(GameSession.DevGrantAmount + 2, session.Money, "undo refunds the B and keeps the grant");
+
+            for (int i = 0; i < 300; i++) session.DevGrantMoney(GameSession.DevGrantAmount);
+            Assert.AreEqual(int.MaxValue, session.Money, "capped, never wraps negative");
+            Assert.Throws<ArgumentOutOfRangeException>(() => session.DevGrantMoney(-1));
+        }
+
+        [Test]
         public void ResetBoard_OnlyAfterH_GivesAnEmptyH_AndKeepsEverythingElse()
         {
             Assert.IsFalse(session.CanResetBoard, "locked until H is unlocked");

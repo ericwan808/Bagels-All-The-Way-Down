@@ -114,6 +114,7 @@ namespace Bagels.View
         RectTransform panel;
         float cursor;
         bool hooked;
+        GameObject devTools; // developer-mode money button, built at runtime
         int page;
         int knownFormulas = -1;
         Order highlighted;
@@ -269,6 +270,7 @@ namespace Bagels.View
             if (menuBackdrop != null) menuBackdrop.onClick.AddListener(CloseMenu);
             if (resumeButton != null) resumeButton.onClick.AddListener(CloseMenu);
             if (quitButton != null) quitButton.onClick.AddListener(QuitToTitle);
+            BuildDevTools();
             CloseHelp();
             CloseMenu();
             hooked = true;
@@ -295,7 +297,29 @@ namespace Bagels.View
             if (menuBackdrop != null) menuBackdrop.onClick.RemoveListener(CloseMenu);
             if (resumeButton != null) resumeButton.onClick.RemoveListener(CloseMenu);
             if (quitButton != null) quitButton.onClick.RemoveListener(QuitToTitle);
+            if (devTools != null) Destroy(devTools);
+            devTools = null;
             hooked = false;
+        }
+
+        /// <summary>
+        /// Developer mode: a "DEV" tag and a "+$10M" button at the right of the money row. Built at runtime only (it is
+        /// not part of the saved skeleton), so toggling developer mode needs no panel rebuild.
+        /// </summary>
+        void BuildDevTools()
+        {
+            if (devTools != null || view == null || !view.DeveloperMode || money == null) return;
+            var row = money.rectTransform.parent as RectTransform;
+            if (row == null) return;
+            const float width = Width - 2 * Pad;
+            var tools = UiFactory.Rect("Dev Tools", row, Vector2.zero);
+            Place(tools, Vector2.zero, new Vector2(width, 40f));
+            devTools = tools.gameObject;
+
+            var tag = UiFactory.Text("Dev Tag", tools, "DEV", 14, Gold, TextAnchor.MiddleRight, FontStyle.Bold);
+            Place(tag.rectTransform, new Vector2(width - 160f, 3f), new Vector2(42f, 34f));
+            var grant = BuildButton(tools, "+$10M", new Vector2(width - 110f, 3f), new Vector2(110f, 34f), out _);
+            grant.onClick.AddListener(view.DevGrantMoney);
         }
 
         // ------------------------------------------------------------ lookups for the tutorial
@@ -701,17 +725,20 @@ namespace Bagels.View
                 .Where(f => f != null && f.Product != null && session.Progress.IsUnlocked(f.Product.Symbol))
                 .ToList();
             var next = session.Progress.NextLocked;
-            var heights = unlocked.Select(RowHeight).ToList();
+            float available = Mathf.Max(100f, pageRoot.rect.height > 0 ? pageRoot.rect.height : 400f);
+            // The target's formula (L) is too big to share a row, so it gets a page of its own and all of its height.
+            var target = view.Level.Target;
+            bool OwnPage(int i) => i < unlocked.Count && target != null && unlocked[i].Product == target;
+            var heights = unlocked.Select((f, i) => OwnPage(i) ? available : RowHeight(f)).ToList();
             if (next != null) heights.Add(LockedHeight);
 
             // Greedy pagination by height.
-            float available = Mathf.Max(100f, pageRoot.rect.height > 0 ? pageRoot.rect.height : 400f);
             var pages = new List<(int start, int count)>();
             int start = 0;
             float used = 0f;
             for (int i = 0; i < heights.Count; i++)
             {
-                if (i > start && used + heights[i] > available)
+                if (i > start && (used + heights[i] > available || OwnPage(i) || OwnPage(i - 1)))
                 {
                     pages.Add((start, i - start));
                     start = i;
